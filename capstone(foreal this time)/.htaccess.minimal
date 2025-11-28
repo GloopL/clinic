@@ -1,0 +1,9 @@
+# Minimal .htaccess for testing
+# Use this if the full .htaccess causes errors
+
+# Set default directory index
+DirectoryIndex index.php index.html
+
+# Prevent directory listing
+Options -Indexes
+
