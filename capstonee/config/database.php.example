@@ -1,0 +1,158 @@
+<?php
+// Database configuration for Hostinger
+// Copy this file to database.php and fill in your actual Hostinger database credentials
+
+$host = "localhost";  // Usually "localhost" on Hostinger, but check your database details
+$username = "u123456789_your_db_user";  // Your Hostinger database username (usually starts with u and numbers)
+$password = "your_database_password";  // Your Hostinger database password
+$database = "u123456789_bsu_clinic_db";  // Your Hostinger database name (usually starts with u and numbers)
+
+// Create connection
+$conn = new mysqli($host, $username, $password);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Select the database (don't create it - it should already exist in Hostinger)
+$conn->select_db($database);
+
+// Create tables if they don't exist
+$tables = [
+    "users" => "CREATE TABLE IF NOT EXISTS users (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        full_name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) NOT NULL,
+        role ENUM('admin', 'staff', 'dentist', 'nurse', 'doctor', 'user') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )",
+    
+    "patients" => "CREATE TABLE IF NOT EXISTS patients (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(20) UNIQUE,
+        first_name VARCHAR(50) NOT NULL,
+        middle_name VARCHAR(50),
+        last_name VARCHAR(50) NOT NULL,
+        date_of_birth DATE NOT NULL,
+        sex ENUM('Male', 'Female') NOT NULL,
+        contact_number VARCHAR(20),
+        address TEXT,
+        program VARCHAR(100),
+        year_level VARCHAR(20),
+        picture VARCHAR(255),
+        qr_code VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )",
+    
+    "medical_records" => "CREATE TABLE IF NOT EXISTS medical_records (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        patient_id INT(11) NOT NULL,
+        record_type ENUM('history_form', 'dental_exam', 'medical_exam') NOT NULL,
+        examination_date DATE NOT NULL,
+        physician_name VARCHAR(100),
+        findings TEXT,
+        recommendations TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    )",
+    
+    "history_forms" => "CREATE TABLE IF NOT EXISTS history_forms (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        record_id INT(11) NOT NULL,
+        denied_participation TINYINT(1) DEFAULT 0,
+        asthma TINYINT(1) DEFAULT 0,
+        seizure_disorder TINYINT(1) DEFAULT 0,
+        heart_problem TINYINT(1) DEFAULT 0,
+        diabetes TINYINT(1) DEFAULT 0,
+        high_blood_pressure TINYINT(1) DEFAULT 0,
+        surgery_history TEXT,
+        chest_pain TINYINT(1) DEFAULT 0,
+        injury_history TEXT,
+        xray_history TEXT,
+        head_injury TINYINT(1) DEFAULT 0,
+        muscle_cramps TINYINT(1) DEFAULT 0,
+        vision_problems TINYINT(1) DEFAULT 0,
+        special_diet TEXT,
+        menstrual_history TEXT,
+        physical_exam_data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (record_id) REFERENCES medical_records(id) ON DELETE CASCADE
+    )",
+    
+    "dental_exams" => "CREATE TABLE IF NOT EXISTS dental_exams (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        record_id INT(11) NOT NULL,
+        dentition_status TEXT,
+        treatment_needs TEXT,
+        periodontal_screening TEXT,
+        occlusion TEXT,
+        appliances TEXT,
+        tmd_status TEXT,
+        remarks TEXT,
+        dentist_name VARCHAR(100),
+        license_no VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (record_id) REFERENCES medical_records(id) ON DELETE CASCADE
+    )",
+    
+    "medical_exams" => "CREATE TABLE IF NOT EXISTS medical_exams (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        record_id INT(11) NOT NULL,
+        height FLOAT,
+        weight FLOAT,
+        bmi FLOAT,
+        blood_pressure VARCHAR(20),
+        pulse_rate INT,
+        temperature FLOAT,
+        vision_status TEXT,
+        physical_findings TEXT,
+        diagnostic_results TEXT,
+        classification VARCHAR(20),
+        recommendations TEXT,
+        physician_name VARCHAR(100),
+        license_no VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        verification_status ENUM('Pending', 'Verified', 'Rejected') DEFAULT 'Pending',
+        FOREIGN KEY (record_id) REFERENCES medical_records(id) ON DELETE CASCADE
+    )",
+    
+    "analytics_data" => "CREATE TABLE IF NOT EXISTS analytics_data (
+        id INT(11) AUTO_INCREMENT PRIMARY KEY,
+        user_id INT(11),
+        action VARCHAR(255),
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        data_type VARCHAR(50),
+        data_value INT,
+        data_label VARCHAR(100),
+        data_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )"
+];
+
+foreach ($tables as $table_name => $sql) {
+    if ($conn->query($sql) !== TRUE) {
+        die("Error creating table $table_name: " . $conn->error);
+    }
+}
+
+// Check if admin user exists, if not create one
+$admin_check = "SELECT * FROM users WHERE username = 'admin'";
+$result = $conn->query($admin_check);
+
+if ($result->num_rows == 0) {
+    $admin_password = password_hash("admin123", PASSWORD_DEFAULT);
+    $create_admin = "INSERT INTO users (username, password, full_name, email, role)
+                    VALUES ('admin', '$admin_password', 'System Administrator', 'admin@bsu.edu.ph', 'admin')";
+
+    if ($conn->query($create_admin) !== TRUE) {
+        die("Error creating admin user: " . $conn->error);
+    }
+}
+
+// Database connection established successfully
+?>
+
