@@ -964,25 +964,7 @@ function generateDefaultAvatar($username) {
             ]
         };
 
-        // Add staff-only notice at the top of the form
-        const staffNotice = `
-            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-info-circle text-blue-400 text-xl"></i>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-blue-700">
-                            <strong>Note:</strong> Fields marked with <span class="bg-gray-200 px-2 py-1 rounded text-xs font-medium">STAFF ONLY</span> are for clinic staff (nurse, dentist, doctor) only. 
-                            Your basic information has been pre-filled automatically. Fill out what you can, and clinic staff will complete the rest during your appointment.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Insert notice at the beginning of the form
-        form.insertAdjacentHTML('afterbegin', staffNotice);
+       
 
         // Gray out staff-only fields and add labels
         const allInputs = form.querySelectorAll('input, select, textarea');

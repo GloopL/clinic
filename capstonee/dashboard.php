@@ -212,74 +212,7 @@ $stmt->execute();
     </div>
     <?php endif; ?>
 
-    <div class="bg-white rounded-xl shadow-md overflow-hidden mb-10">
-      <div class="flex justify-between items-center px-4 py-3 red-orange-table-header text-white">
-        <h3 class="font-semibold flex items-center gap-2"><i class="bi bi-shield-check"></i> Recent Submissions</h3>
-        <a href="modules/records/verify_submission.php" class="px-3 py-1 bg-white bg-opacity-20 text-white text-sm font-semibold rounded hover:bg-opacity-30 backdrop-blur-sm">View All</a>
-      </div>
-      <div class="p-4">
-        <?php
-        // Get 5 most recent submissions
-        $verifications = [];
-        $query = "
-            SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status, 
-                    p.first_name, p.last_name, p.student_id, mr.created_at
-            FROM medical_records mr
-            JOIN patients p ON mr.patient_id = p.id
-            ORDER BY mr.created_at DESC
-            LIMIT 5
-        ";
-        $result = $conn->query($query);
-        while ($row = $result->fetch_assoc()) {
-            $verifications[] = $row;
-        }
-        ?>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="red-orange-table-header text-white">
-              <tr>
-                <th class="py-2 px-3">Student ID</th>
-                <th class="py-2 px-3">Name</th>
-                <th class="py-2 px-3">Type</th>
-                <th class="py-2 px-3">Date</th>
-                <th class="py-2 px-3">Status</th>
-                <th class="py-2 px-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-orange-100">
-              <?php if (count($verifications) > 0): ?>
-                <?php foreach ($verifications as $v): ?>
-                <tr class="red-orange-table-row hover:shadow transition-all duration-200">
-                  <td class="py-2 px-3"><?php echo htmlspecialchars($v['student_id']); ?></td>
-                  <td class="py-2 px-3"><?php echo htmlspecialchars($v['last_name']) . ', ' . htmlspecialchars($v['first_name']); ?></td>
-                  <td class="py-2 px-3"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $v['record_type']))); ?></td>
-                  <td class="py-2 px-3"><?php echo htmlspecialchars($v['examination_date']); ?></td>
-                  <td class="py-2 px-3">
-                    <span class="px-2 py-1 rounded-full text-xs font-semibold <?php 
-                      echo $v['verification_status'] === 'verified' ? 'red-orange-badge-verified' : 
-                          ($v['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 
-                          'red-orange-badge-pending'); 
-                    ?>">
-                      <?php echo strtoupper($v['verification_status']); ?>
-                    </span>
-                  </td>
-                  <td class="py-2 px-3">
-                    <a href="modules/records/verify_submission.php?type=<?php echo $v['record_type']; ?>&id=<?php echo $v['id']; ?>" class="inline-flex items-center gap-1 px-2 py-1 red-orange-badge rounded hover:shadow text-xs font-semibold transition-all">
-                      <i class="bi bi-eye"></i> Review
-                    </a>
-                  </td>
-                </tr>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <tr>
-                  <td colspan="6" class="red-orange-gradient-alert text-orange-700 p-3 rounded text-center">No submissions found.</td>
-                </tr>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+  
     
     <div class="bg-white shadow-lg rounded-2xl overflow-hidden mb-8">
       <div class="red-orange-gradient px-6 py-4">
@@ -290,7 +223,6 @@ $stmt->execute();
       <div class="p-6">
         <div class="red-orange-gradient-alert p-4 rounded-lg mb-6 border-l-4 border-orange-500">
           <h2 class="text-lg font-semibold text-orange-900">Welcome, <?php echo htmlspecialchars($user['username']); ?>!</h2>
-          <p class="text-orange-700">This is the BSU Clinic Record Management System. Use the menu to access different modules.</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
@@ -396,26 +328,7 @@ $stmt->execute();
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div class="bg-white rounded-xl shadow-md p-6 text-center red-orange-gradient-card-light hover:shadow-lg transition-all">
-            <i class="bi bi-qr-code-scan text-5xl text-orange-600"></i>
-            <h3 class="mt-4 text-lg font-semibold text-orange-800">Scan a patient's QR code</h3>
-            <p class="text-orange-600">Quickly access their records using the scanner</p>
-            <a href="modules/qrcode/scan.php" class="mt-4 inline-flex items-center gap-2 px-4 py-2 red-orange-gradient-button text-white rounded-lg font-semibold hover:shadow transition-all">
-              <i class="bi bi-camera"></i> Scan Now
-            </a>
-          </div>
-          <div class="bg-white rounded-xl shadow-md p-6 text-center red-orange-gradient-card-light hover:shadow-lg transition-all">
-            <i class="bi bi-qr-code text-5xl text-orange-600"></i>
-            <h3 class="mt-4 text-lg font-semibold text-orange-800">Generate QR Code</h3>
-            <p class="text-orange-600">Create a new QR code for patient registration</p>
-            <a href="modules/qrcode/generate.php" class="mt-4 inline-flex items-center gap-2 px-4 py-2 red-orange-gradient-button text-white rounded-lg font-semibold hover:shadow transition-all">
-              <i class="bi bi-plus-circle"></i> Generate QR
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+        
   </main>
 
   <footer class="red-orange-gradient text-white py-4 mt-8">
