@@ -51,29 +51,6 @@ while ($row = $recent_patients_result->fetch_assoc()) {
     $recent_patients[] = $row;
 }
 
-// Get recent activity
-$recent_activity_query = "
-    SELECT
-        a.action,
-        a.timestamp,
-        u.username,
-        u.full_name
-    FROM
-        analytics_data a
-    LEFT JOIN
-        users u ON a.user_id = u.id
-    ORDER BY
-        a.timestamp DESC
-    LIMIT 5
-";
-$recent_activity_result = $conn->query($recent_activity_query);
-$recent_activity = [];
-while ($row = $recent_activity_result->fetch_assoc()) {
-    // Use full_name if available, otherwise fallback to username
-    $row['display_name'] = !empty($row['full_name']) ? trim($row['full_name']) : $row['username'];
-    $recent_activity[] = $row;
-}
-
 // Log this dashboard view in analytics
 $action = "Viewed Dentist Dashboard";
 $stmt = $conn->prepare("
@@ -171,6 +148,10 @@ $stmt->execute();
     .stats-card-2 {
       background: linear-gradient(135deg, #ea580c, #f97316);
     }
+    
+    .stats-card-3 {
+      background: linear-gradient(135deg, #f97316, #fb923c);
+    }
   </style>
 </head>
 <body class="bg-gradient-to-br from-orange-50 to-red-50 flex flex-col min-h-screen">
@@ -186,7 +167,7 @@ $stmt->execute();
         <a href="dentist_dashboard.php" class="hover:text-yellow-200 flex items-center gap-1 font-semibold">
           <i class="bi bi-speedometer2"></i> Dashboard
         </a>
-        <a href="logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
+        <a href="#" onclick="openLogoutModal(event)" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
           <i class="bi bi-box-arrow-right"></i> Logout
         </a>
       </nav>
@@ -225,7 +206,7 @@ $stmt->execute();
           <h2 class="text-lg font-semibold text-orange-900">Welcome, Dr. <?php echo htmlspecialchars($display_name); ?>!</h2>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
           <div class="stats-card-1 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
             <i class="bi bi-people-fill text-4xl mb-2"></i>
             <h3 class="text-3xl font-bold"><?php echo $total_patients; ?></h3>
@@ -235,31 +216,36 @@ $stmt->execute();
           <div class="stats-card-2 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
             <i class="bi bi-person-badge-fill text-4xl mb-2"></i>
             <h3 class="text-3xl font-bold"><?php echo $total_dental_exams; ?></h3>
-            <p>Dental Examinations</p>
-            <a href="modules/forms/dental_form.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">New Exam</a>
+            <p>Consultations</p>
+            <a href="modules/records/submissions.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">View</a>
+          </div>
+          <div class="stats-card-3 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
+            <i class="bi bi-shield-exclamation text-4xl mb-2"></i>
+            <h3 class="text-3xl font-bold"><?php echo $pending_verifications; ?></h3>
+            <p>Pending Verifications</p>
+            <a href="modules/records/verify_submission.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">Verify Now</a>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-          <div class="bg-white rounded-xl shadow-md overflow-hidden">
-            <div class="flex justify-between items-center px-4 py-3 red-orange-table-header text-white">
-              <h3 class="font-semibold flex items-center gap-2"><i class="bi bi-clock-history"></i> Recent Patients</h3>
-              <a href="modules/records/patients.php" class="px-3 py-1 bg-white bg-opacity-20 text-white text-sm font-semibold rounded hover:bg-opacity-30 backdrop-blur-sm">View All</a>
-            </div>
-            <div class="p-4">
-              <?php if (count($recent_patients) > 0): ?>
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
-                  <thead class="red-orange-table-header text-white">
-                    <tr>
-                      <th class="py-2 px-3">Student ID</th>
-                      <th class="py-2 px-3">Name</th>
-                      <th class="py-2 px-3">Last Visit</th>
-                      <th class="py-2 px-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-orange-100">
-                    <?php foreach ($recent_patients as $patient): ?>
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+          <div class="flex justify-between items-center px-4 py-3 red-orange-table-header text-white">
+            <h3 class="font-semibold flex items-center gap-2"><i class="bi bi-clock-history"></i> Recent Patients</h3>
+            <a href="modules/records/patients.php" class="px-3 py-1 bg-white bg-opacity-20 text-white text-sm font-semibold rounded hover:bg-opacity-30 backdrop-blur-sm">View All</a>
+          </div>
+          <div class="p-4">
+            <?php if (count($recent_patients) > 0): ?>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="red-orange-table-header text-white">
+                  <tr>
+                    <th class="py-2 px-3">Student ID</th>
+                    <th class="py-2 px-3">Name</th>
+                    <th class="py-2 px-3">Last Visit</th>
+                    <th class="py-2 px-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-orange-100">
+                  <?php foreach ($recent_patients as $patient): ?>
                     <tr class="red-orange-table-row hover:shadow transition-all duration-200">
                       <td class="py-2 px-3"><?php echo htmlspecialchars($patient['student_id']); ?></td>
                       <td class="py-2 px-3"><?php echo htmlspecialchars($patient['last_name']) . ', ' . htmlspecialchars($patient['first_name']); ?></td>
@@ -270,49 +256,13 @@ $stmt->execute();
                         </a>
                       </td>
                     </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
-              </div>
-              <?php else: ?>
-                <div class="red-orange-gradient-alert text-orange-700 p-3 rounded">No patients found in the system.</div>
-              <?php endif; ?>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
             </div>
-          </div>
-
-          <div class="bg-white rounded-xl shadow-md overflow-hidden">
-            <div class="flex justify-between items-center px-4 py-3 red-orange-table-header text-white">
-              <h3 class="font-semibold flex items-center gap-2"><i class="bi bi-activity"></i> Recent Activity</h3>
-              <a href="modules/analytics/analytics_dashboard.php" class="red-orange-gradient-button text-white px-4 py-2 rounded-lg hover:shadow transition-all">
-                <i class="bi bi-bar-chart-line"></i> View Analytics
-              </a>
-            </div>
-            <div class="p-4">
-              <?php if (count($recent_activity) > 0): ?>
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
-                  <thead class="red-orange-table-header text-white">
-                    <tr>
-                      <th class="py-2 px-3">Action</th>
-                      <th class="py-2 px-3">User</th>
-                      <th class="py-2 px-3">Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-orange-100">
-                    <?php foreach ($recent_activity as $activity): ?>
-                    <tr class="red-orange-table-row hover:shadow transition-all duration-200">
-                      <td class="py-2 px-3"><?php echo htmlspecialchars($activity['action']); ?></td>
-                      <td class="py-2 px-3"><?php echo htmlspecialchars($activity['display_name']); ?></td>
-                      <td class="py-2 px-3"><?php echo htmlspecialchars($activity['timestamp']); ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
-              </div>
-              <?php else: ?>
-                <div class="red-orange-gradient-alert text-orange-700 p-3 rounded">No recent activity found.</div>
-              <?php endif; ?>
-            </div>
+            <?php else: ?>
+              <div class="red-orange-gradient-alert text-orange-700 p-3 rounded">No patients found in the system.</div>
+            <?php endif; ?>
           </div>
         </div>
 
@@ -327,5 +277,49 @@ $stmt->execute();
       <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
     </div>
   </footer>
+
+  <!-- Logout Confirmation Modal -->
+  <div id="logoutModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div class="p-6">
+          <div class="flex items-center justify-center mb-4">
+            <div class="bg-red-100 p-3 rounded-full">
+              <i class="bi bi-box-arrow-right text-red-600 text-2xl"></i>
+            </div>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-800 text-center mb-2">Confirm Logout</h3>
+          <p class="text-gray-600 text-center mb-6">Are you sure you want to logout from your account?</p>
+          <div class="flex gap-3">
+            <button onclick="closeLogoutModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-300 transition">
+              Cancel
+            </button>
+            <a href="logout.php" class="flex-1 red-orange-gradient-button text-white py-3 rounded-lg font-medium text-center hover:shadow-lg transition">
+              Yes, Logout
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Logout modal functions
+  function openLogoutModal(event) {
+    event.preventDefault();
+    document.getElementById('logoutModal').classList.remove('hidden');
+  }
+
+  function closeLogoutModal() {
+    document.getElementById('logoutModal').classList.add('hidden');
+  }
+
+  // Close logout modal when clicking outside
+  document.getElementById('logoutModal').addEventListener('click', function(e) {
+    if (e.target.id === 'logoutModal') {
+      closeLogoutModal();
+    }
+  });
+  </script>
 </body>
 </html>

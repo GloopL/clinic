@@ -394,20 +394,13 @@ if ($patient_data) {
                     <div class="space-y-4">
                         <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Additional Information</h3>
                         
-                        <div>
-                            <label for="department" class="block text-sm font-medium text-gray-700 mb-1">Program</label>
-                            <select id="department" name="department" 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange">
-                            <option value="">Select Program</option>
-                                <option value="College of Engineering" <?php echo ($user_details['department'] ?? '') == 'College of Engineering' ? 'selected' : ''; ?>>College of Engineering</option>
-                                <option value="College of Education" <?php echo ($user_details['department'] ?? '') == 'College of Education' ? 'selected' : ''; ?>>College of Education</option>
-                                <option value="College of Arts and Sciences" <?php echo ($user_details['department'] ?? '') == 'College of Arts and Sciences' ? 'selected' : ''; ?>>College of Arts and Sciences</option>
-                                <option value="College of Nursing" <?php echo ($user_details['department'] ?? '') == 'College of Nursing' ? 'selected' : ''; ?>>College of Nursing</option>
-                                <option value="College of Accountancy and Business" <?php echo ($user_details['department'] ?? '') == 'College of Accountancy and Business' ? 'selected' : ''; ?>>College of Accountancy and Business</option>
-                                <option value="College of Industrial Technology" <?php echo ($user_details['department'] ?? '') == 'College of Industrial Technology' ? 'selected' : ''; ?>>College of Industrial Technology</option>
-                                <option value="College of Informatics and Computing Sciences" <?php echo ($user_details['department'] ?? '') == 'College of Informatics and Computing Sciences' ? 'selected' : ''; ?>>College of Informatics and Computing Sciences</option>
-                            </select>
-                        </div>
+                      <div>
+    <label for="department" class="block text-sm font-medium text-gray-700 mb-1">Program</label>
+    <input type="text" id="department" name="department" 
+           value="<?php echo htmlspecialchars($user_details['department'] ?? ''); ?>"
+           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange"
+           placeholder="Enter Program">
+</div>
 
                         <div>
                             <label for="year_level" class="block text-sm font-medium text-gray-700 mb-1">Year Level</label>

@@ -84,8 +84,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
     }
 }
 
-// Process registration form
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
+// Process STUDENT registration form
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_student'])) {
     $sr_code = trim($_POST['sr_code']);
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
@@ -96,6 +96,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
     $birthdate = isset($_POST['birthdate']) ? $_POST['birthdate'] : '';
     $contact_number = isset($_POST['contact_number']) ? trim($_POST['contact_number']) : '';
     $address = isset($_POST['address']) ? trim($_POST['address']) : '';
+    $program = isset($_POST['program']) ? trim($_POST['program']) : '';
+    $year_level = isset($_POST['year_level']) ? trim($_POST['year_level']) : '';
 
     if (empty($sr_code) || empty($password) || empty($confirm_password)) {
         $error = "All fields are required.";
@@ -122,14 +124,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
 
             if ($stmt->execute()) {
                 // Also insert into patients table
-                // Convert birthdate to date_of_birth format if needed
                 $date_of_birth = $birthdate;
                 
                 // Only insert into patients if we have required fields
                 if (!empty($first_name) && !empty($last_name) && !empty($date_of_birth) && !empty($sex)) {
                     $stmt_patient = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, contact_number, address, program, year_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $program = ''; // Not collected in this form
-                    $year_level = ''; // Not collected in this form
                     $stmt_patient->bind_param("ssssssssss", $sr_code, $first_name, $middle_name, $last_name, $date_of_birth, $sex, $contact_number, $address, $program, $year_level);
                     
                     if (!$stmt_patient->execute()) {
@@ -139,11 +138,77 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
                     $stmt_patient->close();
                 }
                 
-                $success = "Registration successful! You can now log in.";
-                $show_register_modal = false;
+                $success = "Student registration successful! You can now log in.";
+                $show_student_modal = false;
             } else {
                 $error = "Registration failed. Please try again.";
-                $show_register_modal = true;
+                $show_student_modal = true;
+            }
+        }
+    }
+}
+
+// Process EMPLOYEE registration form
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_employee'])) {
+    $employee_id = trim($_POST['employee_id']);
+    $password = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
+    $first_name = isset($_POST['first_name']) ? trim($_POST['first_name']) : '';
+    $middle_name = isset($_POST['middle_name']) ? trim($_POST['middle_name']) : '';
+    $last_name = isset($_POST['last_name']) ? trim($_POST['last_name']) : '';
+    $sex = isset($_POST['sex']) ? $_POST['sex'] : '';
+    $birthdate = isset($_POST['birthdate']) ? $_POST['birthdate'] : '';
+    $contact_number = isset($_POST['contact_number']) ? trim($_POST['contact_number']) : '';
+    $address = isset($_POST['address']) ? trim($_POST['address']) : '';
+    $department = isset($_POST['department']) ? trim($_POST['department']) : '';
+    $position = isset($_POST['position']) ? trim($_POST['position']) : '';
+    $employee_type = isset($_POST['employee_type']) ? $_POST['employee_type'] : '';
+
+    if (empty($employee_id) || empty($password) || empty($confirm_password)) {
+        $error = "All fields are required.";
+    } elseif ($password !== $confirm_password) {
+        $error = "Passwords do not match.";
+    } else {
+        $stmt = $conn->prepare("SELECT * FROM users WHERE username = ?");
+        $stmt->bind_param("s", $employee_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows > 0) {
+            $error = "Employee ID already registered.";
+        } else {
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $role = 'staff'; // Default role for employees
+            // Combine first name, middle name (if provided), and last name
+            $name_parts = array_filter([$first_name, $middle_name, $last_name]);
+            $full_name = trim(implode(' ', $name_parts));
+            $email = '';
+
+            $stmt = $conn->prepare("INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssss", $employee_id, $hashed_password, $full_name, $email, $role);
+
+            if ($stmt->execute()) {
+                // Also insert into employees table if it exists
+                $date_of_birth = $birthdate;
+                
+                // Check if employees table exists and insert
+                $check_table = $conn->query("SHOW TABLES LIKE 'employees'");
+                if ($check_table->num_rows > 0) {
+                    $stmt_employee = $conn->prepare("INSERT INTO employees (employee_id, first_name, middle_name, last_name, date_of_birth, sex, contact_number, address, department, position, employee_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt_employee->bind_param("sssssssssss", $employee_id, $first_name, $middle_name, $last_name, $date_of_birth, $sex, $contact_number, $address, $department, $position, $employee_type);
+                    
+                    if (!$stmt_employee->execute()) {
+                        // Log error but don't fail registration
+                        error_log("Failed to insert employee record: " . $stmt_employee->error);
+                    }
+                    $stmt_employee->close();
+                }
+                
+                $success = "Employee registration successful! You can now log in.";
+                $show_employee_modal = false;
+            } else {
+                $error = "Registration failed. Please try again.";
+                $show_employee_modal = true;
             }
         }
     }
@@ -190,6 +255,14 @@ if (isset($_GET['logout'])) {
             --gray-100: #f3f4f6;
             --gray-600: #4b5563;
             --gray-900: #111827;
+            --red-50: #fef2f2;
+            --blue-50: #eff6ff;
+            --blue-100: #dbeafe;
+            --blue-600: #2563eb;
+            --blue-800: #1e40af;
+            --green-100: #dcfce7;
+            --green-500: #22c55e;
+            --green-800: #166534;
         }
 
         /* Utility Classes */
@@ -889,7 +962,7 @@ if (isset($_GET['logout'])) {
         .modal-content {
             background: white;
             border-radius: 12px;
-            max-width: 400px;
+            max-width: 500px;
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
@@ -959,6 +1032,33 @@ if (isset($_GET['logout'])) {
             border-color: var(--red-800);
             box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
             transform: translateY(-2px);
+        }
+
+        /* Registration Options Styles */
+        .registration-options {
+            display: grid;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .registration-option-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .registration-option-card:hover {
+            border-color: var(--red-800);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+
+        .registration-option-card.active {
+            border-color: var(--red-800);
+            background: var(--red-50);
         }
 
         /* Password Toggle Styles */
@@ -1121,6 +1221,8 @@ if (isset($_GET['logout'])) {
         .icon-person-badge::before { content: "\f0c0"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
         .icon-lock::before { content: "\f023"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
         .icon-check-circle::before { content: "\f058"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
+        .icon-graduation-cap::before { content: "\f19d"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
+        .icon-briefcase::before { content: "\f0b1"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
 
         [class^="icon-"]::before {
             display: inline-block;
@@ -1128,6 +1230,34 @@ if (isset($_GET['logout'])) {
             font-size: 1.1em;
             color: #fcf1f5ff;
             vertical-align: middle;
+        }
+
+        /* Form Styles */
+        .form-section {
+            margin-bottom: 24px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        textarea.form-input {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        select.form-input {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
         }
 
         /* ========== RESPONSIVE DESIGN ========== */
@@ -1265,6 +1395,11 @@ if (isset($_GET['logout'])) {
             
             .modal-body {
                 padding: 20px;
+            }
+            
+            .form-row {
+                flex-direction: column;
+                gap: 0;
             }
         }
         
@@ -1745,7 +1880,7 @@ if (isset($_GET['logout'])) {
                     <p style="color: var(--gray-600); font-size: 14px;">Clinic Record Management System</p>
                 </div>
 
-                <?php if (!empty($error) && !isset($_POST['register'])): ?>
+                <?php if (!empty($error) && !isset($_POST['register_student']) && !isset($_POST['register_employee'])): ?>
                     <div class="alert">
                         <?php echo htmlspecialchars($error); ?>
                     </div>
@@ -1805,7 +1940,7 @@ if (isset($_GET['logout'])) {
                 
                 <div class="text-center">
                     <span style="color: var(--gray-600);">Don't have an account yet?</span>
-                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeLoginModal(); openRegisterModal();">Register as Student</a>
+                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeLoginModal(); openRegisterOptionsModal();">Register</a>
                 </div>
                 
                 <div style="border-top: 1px solid #e5e7eb; margin-top: 24px; padding-top: 16px; text-align: center; background: var(--gray-100); margin-left: -24px; margin-right: -24px; margin-bottom: -24px; padding: 16px; border-radius: 0 0 12px 12px;">
@@ -1817,295 +1952,537 @@ if (isset($_GET['logout'])) {
         </div>
     </div>
 
-   <!-- Register Modal -->
-<div id="registerModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="modal-icon" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 4px solid white; background: white;">
-            <h2 class="modal-title">BSU Clinic Record Management System</h2>
-        </div>
-        
-        <div class="modal-body">
-            <div class="text-center" style="margin-bottom: 24px;">
-                <h3 style="color: var(--red-800); margin-bottom: 4px; font-weight: 600;">Student Account Registration</h3>
-                <p style="color: var(--gray-600); font-size: 14px;">Secure your clinic portal access with your official SR Code</p>
+    <!-- Registration Options Modal -->
+    <div id="registerOptionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="modal-icon" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 4px solid white; background: white;">
+                <h2 class="modal-title">BSU Clinic Record Management System</h2>
             </div>
-
-            <?php if (!empty($error) && isset($_POST['register'])): ?>
-                <div class="alert">
-                    <span class="icon-exclamation-circle"></span> <?php echo htmlspecialchars($error); ?>
+            
+            <div class="modal-body">
+                <div class="text-center" style="margin-bottom: 32px;">
+                    <h3 style="color: var(--red-800); margin-bottom: 8px; font-weight: 600;">Select Account Type</h3>
+                    <p style="color: var(--gray-600); font-size: 14px;">Choose your account type to proceed with registration</p>
                 </div>
-            <?php endif; ?>
 
-            <?php if (!empty($success)): ?>
-                <div class="alert success">
-                    <span class="icon-check-circle"></span> <?php echo htmlspecialchars($success); ?>
-                </div>
-                <script>
-                    setTimeout(function() {
-                        closeRegisterModal();
-                        openLoginModal();
-                    }, 2000);
-                </script>
-            <?php endif; ?>
-
-            <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
-                <!-- Personal Information Section -->
-                <div class="form-section">
-                    <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
-                        <span class="icon-person"></span> Personal Information
-                    </h4>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="first_name">
-                                <span class="icon-person"></span> First Name
-                            </label>
-                            <input type="text" 
-                                   name="first_name" 
-                                   id="first_name" 
-                                   placeholder="Enter your first name"
-                                   class="form-input" 
-                                   required
-                                   value="<?php echo isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : ''; ?>">
+                <div class="registration-options" style="display: grid; gap: 16px; margin-bottom: 24px;">
+                    <!-- Student Registration Option -->
+                    <div class="registration-option-card" 
+                         onclick="openStudentRegistrationModal()" 
+                         style="border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.3s ease; text-align: center;">
+                        <div style="width: 60px; height: 60px; background: linear-gradient(to right, var(--red-800), var(--yellow-500)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                            <span class="icon-graduation-cap" style="color: white; font-size: 24px;"></span>
                         </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="middle_name">
-                                <span class="icon-person"></span> Middle Name
-                            </label>
-                            <input type="text" 
-                                   name="middle_name" 
-                                   id="middle_name" 
-                                   placeholder="Enter your middle name"
-                                   class="form-input"
-                                   value="<?php echo isset($_POST['middle_name']) ? htmlspecialchars($_POST['middle_name']) : ''; ?>">
+                        <h4 style="color: var(--gray-900); margin-bottom: 8px; font-weight: 600;">Student Registration</h4>
+                        <p style="color: var(--gray-600); font-size: 14px; margin-bottom: 12px;">
+                            For enrolled students of Batangas State University
+                        </p>
+                        <div style="display: flex; justify-content: center; gap: 8px;">
+                            <span style="background: var(--red-100); color: var(--red-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">SR Code Required</span>
+                            <span style="background: var(--blue-100); color: var(--blue-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Clinic Access</span>
                         </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label" for="last_name">
-                            <span class="icon-person"></span> Last Name
-                        </label>
-                        <input type="text" 
-                               name="last_name" 
-                               id="last_name" 
-                               placeholder="Enter your last name"
-                               class="form-input" 
-                               required
-                               value="<?php echo isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : ''; ?>">
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="sex">
-                                <span class="icon-gender"></span> Sex
-                            </label>
-                            <select name="sex" id="sex" class="form-input" required>
-                                <option value="">Select Sex</option>
-                                <option value="Male" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Male') ? 'selected' : ''; ?>>Male</option>
-                                <option value="Female" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Female') ? 'selected' : ''; ?>>Female</option>
-                                <option value="Other" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Other') ? 'selected' : ''; ?>>Other</option>
-                            </select>
+                    <!-- Employee Registration Option -->
+                    <div class="registration-option-card" 
+                         onclick="openEmployeeRegistrationModal()" 
+                         style="border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.3s ease; text-align: center;">
+                        <div style="width: 60px; height: 60px; background: linear-gradient(to right, var(--blue-600), var(--green-500)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                            <span class="icon-briefcase" style="color: white; font-size: 24px;"></span>
                         </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="birthdate">
-                                <span class="icon-calendar"></span> Birthdate
-                            </label>
-                            <input type="date" 
-                                   name="birthdate" 
-                                   id="birthdate" 
-                                   class="form-input" 
-                                   required
-                                   value="<?php echo isset($_POST['birthdate']) ? htmlspecialchars($_POST['birthdate']) : ''; ?>">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="contact_number">
-                            <span class="icon-phone"></span> Contact Number
-                        </label>
-                        <input type="tel" 
-                               name="contact_number" 
-                               id="contact_number" 
-                               placeholder="Enter your contact number"
-                               class="form-input"
-                               value="<?php echo isset($_POST['contact_number']) ? htmlspecialchars($_POST['contact_number']) : ''; ?>">
-                    </div>
-                    
-                    <!-- Address Section -->
-                    <div class="form-group">
-                        <label class="form-label" for="address">
-                            <span class="icon-home"></span> Complete Address
-                        </label>
-                        <textarea name="address" 
-                                  id="address" 
-                                  placeholder="Enter your complete address (House No., Street, Barangay, City/Municipality, Province)"
-                                  class="form-input"
-                                  rows="3"><?php echo isset($_POST['address']) ? htmlspecialchars($_POST['address']) : ''; ?></textarea>
-                    </div>
-                </div>
-                
-                <!-- Account Information Section -->
-                <div class="form-section">
-                    <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
-                        <span class="icon-person-badge"></span> Account Information
-                    </h4>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="sr_code">
-                            <span class="icon-person-badge"></span> SR Code
-                        </label>
-                        <input type="text" 
-                               name="sr_code" 
-                               id="sr_code" 
-                               placeholder="Enter your SR Code (e.g., 2021-00001)"
-                               class="form-input" 
-                               required
-                               value="<?php echo isset($_POST['sr_code']) ? htmlspecialchars($_POST['sr_code']) : ''; ?>">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="reg_password">
-                            <span class="icon-lock"></span> Password
-                        </label>
-                        <div class="password-input-container">
-                            <input type="password" 
-                                   name="password" 
-                                   id="reg_password" 
-                                   placeholder="Create a strong password"
-                                   class="form-input" 
-                                   required>
-                            <button type="button" class="password-toggle-btn" id="regPasswordToggle" title="Show password">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="confirm_password">
-                            <span class="icon-check-circle"></span> Confirm Password
-                        </label>
-                        <div class="password-input-container">
-                            <input type="password" 
-                                   name="confirm_password" 
-                                   id="confirm_password" 
-                                   placeholder="Re-enter password"
-                                   class="form-input" 
-                                   required>
-                            <button type="button" class="password-toggle-btn" id="confirmPasswordToggle" title="Show password">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                        <h4 style="color: var(--gray-900); margin-bottom: 8px; font-weight: 600;">Employee Registration</h4>
+                        <p style="color: var(--gray-600); font-size: 14px; margin-bottom: 12px;">
+                            For faculty, staff, and administrative personnel
+                        </p>
+                        <div style="display: flex; justify-content: center; gap: 8px;">
+                            <span style="background: var(--blue-100); color: var(--blue-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Employee ID</span>
+                            <span style="background: var(--green-100); color: var(--green-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Staff Access</span>
                         </div>
                     </div>
                 </div>
                 
-                <button type="submit" name="register" class="btn btn-primary" style="width: 100%; margin-bottom: 16px; font-size: 18px; padding: 12px;">
-                    <span class="icon-person-check"></span> Register 
-                </button>
-            </form>
-            
-            <div class="text-center">
-                <span style="color: var(--gray-600);">Already have an account?</span>
-                <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeRegisterModal(); openLoginModal();">Back to Login</a>
-            </div>
-            
-            <div style="border-top: 1px solid #e5e7eb; margin-top: 24px; padding-top: 16px; text-align: center; background: var(--gray-100); margin-left: -24px; margin-right: -24px; margin-bottom: -24px; padding: 16px; border-radius: 0 0 12px 12px;">
-                <small style="font-size: 14px; color: var(--gray-600);">
-                    © <?php echo date('Y'); ?> Batangas State University
-                </small>
+                <div class="text-center" style="margin-top: 24px;">
+                    <span style="color: var(--gray-600);">Already have an account?</span>
+                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeRegisterOptionsModal(); openLoginModal();">Back to Login</a>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<style>
-    .form-section {
-        margin-bottom: 24px;
-    }
-    
-    .form-row {
-        display: flex;
-        gap: 16px;
-    }
-    
-    .form-row .form-group {
-        flex: 1;
-    }
-    
-    .form-input {
-        width: 100%;
-        padding: 12px;
-        border: 1px solid var(--gray-300);
-        border-radius: 8px;
-        font-size: 14px;
-        transition: all 0.3s ease;
-    }
-    
-    .form-input:focus {
-        outline: none;
-        border-color: var(--red-600);
-        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
-    }
-    
-    textarea.form-input {
-        resize: vertical;
-        min-height: 80px;
-    }
-    
-    @media (max-width: 480px) {
-        .form-row {
-            flex-direction: column;
-            gap: 0;
-        }
-    }
-</style>
+    <!-- Student Registration Modal -->
+    <div id="studentRegistrationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="modal-icon" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 4px solid white; background: white;">
+                <h2 class="modal-title">Student Registration</h2>
+            </div>
+            
+            <div class="modal-body">
+                <div class="text-center" style="margin-bottom: 24px;">
+                    <h3 style="color: var(--red-800); margin-bottom: 4px; font-weight: 600;">Student Account Registration</h3>
+                    <p style="color: var(--gray-600); font-size: 14px;">Secure your clinic portal access with your official SR Code</p>
+                </div>
 
-<script>
-    // Password toggle functionality
-    document.getElementById('regPasswordToggle').addEventListener('click', function() {
-        const passwordInput = document.getElementById('reg_password');
-        const icon = this.querySelector('i');
-        
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
-        } else {
-            passwordInput.type = 'password';
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
-        }
-    });
-    
-    document.getElementById('confirmPasswordToggle').addEventListener('click', function() {
-        const passwordInput = document.getElementById('confirm_password');
-        const icon = this.querySelector('i');
-        
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
-        } else {
-            passwordInput.type = 'password';
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
-        }
-    });
-    
-    // Auto-format SR Code input
-    document.getElementById('sr_code').addEventListener('input', function(e) {
-        let value = e.target.value.replace(/[^0-9-]/g, '');
-        
-        // Auto-format as YYYY-XXXXX if not already formatted
-        if (value.length === 9 && !value.includes('-')) {
-            value = value.substring(0, 4) + '-' + value.substring(4);
-        }
-        
-        e.target.value = value;
-    });
-</script>
+                <?php if (!empty($error) && isset($_POST['register_student'])): ?>
+                    <div class="alert">
+                        <span class="icon-exclamation-circle"></span> <?php echo htmlspecialchars($error); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($success) && isset($_POST['register_student'])): ?>
+                    <div class="alert success">
+                        <span class="icon-check-circle"></span> <?php echo htmlspecialchars($success); ?>
+                    </div>
+                    <script>
+                        setTimeout(function() {
+                            closeStudentRegistrationModal();
+                            openLoginModal();
+                        }, 2000);
+                    </script>
+                <?php endif; ?>
+
+                <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
+                    <!-- Personal Information Section -->
+                    <div class="form-section">
+                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
+                            <span class="icon-person"></span> Personal Information
+                        </h4>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="student_first_name">
+                                    <span class="icon-person"></span> First Name
+                                </label>
+                                <input type="text" 
+                                       name="first_name" 
+                                       id="student_first_name" 
+                                       placeholder="Enter your first name"
+                                       class="form-input" 
+                                       required
+                                       value="<?php echo isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : ''; ?>">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="student_middle_name">
+                                    <span class="icon-person"></span> Middle Name
+                                </label>
+                                <input type="text" 
+                                       name="middle_name" 
+                                       id="student_middle_name" 
+                                       placeholder="Enter your middle name"
+                                       class="form-input"
+                                       value="<?php echo isset($_POST['middle_name']) ? htmlspecialchars($_POST['middle_name']) : ''; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="student_last_name">
+                                <span class="icon-person"></span> Last Name
+                            </label>
+                            <input type="text" 
+                                   name="last_name" 
+                                   id="student_last_name" 
+                                   placeholder="Enter your last name"
+                                   class="form-input" 
+                                   required
+                                   value="<?php echo isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : ''; ?>">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="student_sex">
+                                    <span class="icon-gender"></span> Sex
+                                </label>
+                                <select name="sex" id="student_sex" class="form-input" required>
+                                    <option value="">Select Sex</option>
+                                    <option value="Male" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Male') ? 'selected' : ''; ?>>Male</option>
+                                    <option value="Female" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Female') ? 'selected' : ''; ?>>Female</option>
+                                    <option value="Other" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Other') ? 'selected' : ''; ?>>Other</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="student_birthdate">
+                                    <span class="icon-calendar"></span> Birthdate
+                                </label>
+                                <input type="date" 
+                                       name="birthdate" 
+                                       id="student_birthdate" 
+                                       class="form-input" 
+                                       required
+                                       value="<?php echo isset($_POST['birthdate']) ? htmlspecialchars($_POST['birthdate']) : ''; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="student_contact_number">
+                                <span class="icon-phone"></span> Contact Number
+                            </label>
+                            <input type="tel" 
+                                   name="contact_number" 
+                                   id="student_contact_number" 
+                                   placeholder="Enter your contact number"
+                                   class="form-input"
+                                   value="<?php echo isset($_POST['contact_number']) ? htmlspecialchars($_POST['contact_number']) : ''; ?>">
+                        </div>
+                        
+                        <!-- Address Section -->
+                        <div class="form-group">
+                            <label class="form-label" for="student_address">
+                                <span class="icon-home"></span> Complete Address
+                            </label>
+                            <textarea name="address" 
+                                      id="student_address" 
+                                      placeholder="Enter your complete address (House No., Street, Barangay, City/Municipality, Province)"
+                                      class="form-input"
+                                      rows="3"><?php echo isset($_POST['address']) ? htmlspecialchars($_POST['address']) : ''; ?></textarea>
+                        </div>
+                        
+                        <!-- Academic Information -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="program">
+                                    <span class="icon-book"></span> Program/Course
+                                </label>
+                                <input type="text" 
+                                       name="program" 
+                                       id="program" 
+                                       placeholder="e.g., BS Computer Science"
+                                       class="form-input"
+                                       value="<?php echo isset($_POST['program']) ? htmlspecialchars($_POST['program']) : ''; ?>">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="year_level">
+                                    <span class="icon-award"></span> Year Level
+                                </label>
+                                <select name="year_level" id="year_level" class="form-input">
+                                    <option value="">Select Year Level</option>
+                                    <option value="1st Year" <?php echo (isset($_POST['year_level']) && $_POST['year_level'] == '1st Year') ? 'selected' : ''; ?>>1st Year</option>
+                                    <option value="2nd Year" <?php echo (isset($_POST['year_level']) && $_POST['year_level'] == '2nd Year') ? 'selected' : ''; ?>>2nd Year</option>
+                                    <option value="3rd Year" <?php echo (isset($_POST['year_level']) && $_POST['year_level'] == '3rd Year') ? 'selected' : ''; ?>>3rd Year</option>
+                                    <option value="4th Year" <?php echo (isset($_POST['year_level']) && $_POST['year_level'] == '4th Year') ? 'selected' : ''; ?>>4th Year</option>
+                                    <option value="5th Year" <?php echo (isset($_POST['year_level']) && $_POST['year_level'] == '5th Year') ? 'selected' : ''; ?>>5th Year</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Account Information Section -->
+                    <div class="form-section">
+                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
+                            <span class="icon-person-badge"></span> Account Information
+                        </h4>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="student_sr_code">
+                                <span class="icon-person-badge"></span> SR Code
+                            </label>
+                            <input type="text" 
+                                   name="sr_code" 
+                                   id="student_sr_code" 
+                                   placeholder="Enter your SR Code (e.g., 2021-00001)"
+                                   class="form-input" 
+                                   required
+                                   value="<?php echo isset($_POST['sr_code']) ? htmlspecialchars($_POST['sr_code']) : ''; ?>">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="student_password">
+                                <span class="icon-lock"></span> Password
+                            </label>
+                            <div class="password-input-container">
+                                <input type="password" 
+                                       name="password" 
+                                       id="student_password" 
+                                       placeholder="Create a strong password"
+                                       class="form-input" 
+                                       required>
+                                <button type="button" class="password-toggle-btn" id="studentPasswordToggle" title="Show password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="student_confirm_password">
+                                <span class="icon-check-circle"></span> Confirm Password
+                            </label>
+                            <div class="password-input-container">
+                                <input type="password" 
+                                       name="confirm_password" 
+                                       id="student_confirm_password" 
+                                       placeholder="Re-enter password"
+                                       class="form-input" 
+                                       required>
+                                <button type="button" class="password-toggle-btn" id="studentConfirmPasswordToggle" title="Show password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" name="register_student" class="btn btn-primary" style="width: 100%; margin-bottom: 16px; font-size: 18px; padding: 12px;">
+                        <span class="icon-person-check"></span> Register as Student
+                    </button>
+                </form>
+                
+                <div class="text-center">
+                    <span style="color: var(--gray-600);">Already have an account?</span>
+                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeStudentRegistrationModal(); openLoginModal();">Back to Login</a>
+                    <span style="color: var(--gray-600); margin: 0 8px;">or</span>
+                    <a href="#" style="color: var(--red-800); font-weight: 600; text-decoration: none;" onclick="closeStudentRegistrationModal(); openRegisterOptionsModal();">Choose Different Account Type</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Registration Modal -->
+    <div id="employeeRegistrationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="modal-icon" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 4px solid white; background: white;">
+                <h2 class="modal-title">Employee Registration</h2>
+            </div>
+            
+            <div class="modal-body">
+                <div class="text-center" style="margin-bottom: 24px;">
+                    <h3 style="color: var(--red-800); margin-bottom: 4px; font-weight: 600;">Employee Account Registration</h3>
+                    <p style="color: var(--gray-600); font-size: 14px;">Secure your clinic portal access with your official Employee ID</p>
+                </div>
+
+                <?php if (!empty($error) && isset($_POST['register_employee'])): ?>
+                    <div class="alert">
+                        <span class="icon-exclamation-circle"></span> <?php echo htmlspecialchars($error); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($success) && isset($_POST['register_employee'])): ?>
+                    <div class="alert success">
+                        <span class="icon-check-circle"></span> <?php echo htmlspecialchars($success); ?>
+                    </div>
+                    <script>
+                        setTimeout(function() {
+                            closeEmployeeRegistrationModal();
+                            openLoginModal();
+                        }, 2000);
+                    </script>
+                <?php endif; ?>
+
+                <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
+                    <!-- Personal Information Section -->
+                    <div class="form-section">
+                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
+                            <span class="icon-person"></span> Personal Information
+                        </h4>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="employee_first_name">
+                                    <span class="icon-person"></span> First Name
+                                </label>
+                                <input type="text" 
+                                       name="first_name" 
+                                       id="employee_first_name" 
+                                       placeholder="Enter your first name"
+                                       class="form-input" 
+                                       required
+                                       value="<?php echo isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : ''; ?>">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="employee_middle_name">
+                                    <span class="icon-person"></span> Middle Name
+                                </label>
+                                <input type="text" 
+                                       name="middle_name" 
+                                       id="employee_middle_name" 
+                                       placeholder="Enter your middle name"
+                                       class="form-input"
+                                       value="<?php echo isset($_POST['middle_name']) ? htmlspecialchars($_POST['middle_name']) : ''; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="employee_last_name">
+                                <span class="icon-person"></span> Last Name
+                            </label>
+                            <input type="text" 
+                                   name="last_name" 
+                                   id="employee_last_name" 
+                                   placeholder="Enter your last name"
+                                   class="form-input" 
+                                   required
+                                   value="<?php echo isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : ''; ?>">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="employee_sex">
+                                    <span class="icon-gender"></span> Sex
+                                </label>
+                                <select name="sex" id="employee_sex" class="form-input" required>
+                                    <option value="">Select Sex</option>
+                                    <option value="Male" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Male') ? 'selected' : ''; ?>>Male</option>
+                                    <option value="Female" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Female') ? 'selected' : ''; ?>>Female</option>
+                                    <option value="Other" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Other') ? 'selected' : ''; ?>>Other</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="employee_birthdate">
+                                    <span class="icon-calendar"></span> Birthdate
+                                </label>
+                                <input type="date" 
+                                       name="birthdate" 
+                                       id="employee_birthdate" 
+                                       class="form-input" 
+                                       required
+                                       value="<?php echo isset($_POST['birthdate']) ? htmlspecialchars($_POST['birthdate']) : ''; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="employee_contact_number">
+                                <span class="icon-phone"></span> Contact Number
+                            </label>
+                            <input type="tel" 
+                                   name="contact_number" 
+                                   id="employee_contact_number" 
+                                   placeholder="Enter your contact number"
+                                   class="form-input"
+                                   value="<?php echo isset($_POST['contact_number']) ? htmlspecialchars($_POST['contact_number']) : ''; ?>">
+                        </div>
+                        
+                        <!-- Address Section -->
+                        <div class="form-group">
+                            <label class="form-label" for="employee_address">
+                                <span class="icon-home"></span> Complete Address
+                            </label>
+                            <textarea name="address" 
+                                      id="employee_address" 
+                                      placeholder="Enter your complete address (House No., Street, Barangay, City/Municipality, Province)"
+                                      class="form-input"
+                                      rows="3"><?php echo isset($_POST['address']) ? htmlspecialchars($_POST['address']) : ''; ?></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Employment Information Section -->
+                    <div class="form-section">
+                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
+                            <span class="icon-briefcase"></span> Employment Information
+                        </h4>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="employee_id">
+                                <span class="icon-person-badge"></span> Employee ID
+                            </label>
+                            <input type="text" 
+                                   name="employee_id" 
+                                   id="employee_id" 
+                                   placeholder="Enter your Employee ID"
+                                   class="form-input" 
+                                   required
+                                   value="<?php echo isset($_POST['employee_id']) ? htmlspecialchars($_POST['employee_id']) : ''; ?>">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="department">
+                                    <span class="icon-building"></span> Department
+                                </label>
+                                <input type="text" 
+                                       name="department" 
+                                       id="department" 
+                                       placeholder="e.g., College of Engineering"
+                                       class="form-input"
+                                       value="<?php echo isset($_POST['department']) ? htmlspecialchars($_POST['department']) : ''; ?>">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="position">
+                                    <span class="icon-user-tie"></span> Position
+                                </label>
+                                <input type="text" 
+                                       name="position" 
+                                       id="position" 
+                                       placeholder="e.g., Professor, Staff, etc."
+                                       class="form-input"
+                                       value="<?php echo isset($_POST['position']) ? htmlspecialchars($_POST['position']) : ''; ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="employee_type">
+                                <span class="icon-users"></span> Employee Type
+                            </label>
+                            <select name="employee_type" id="employee_type" class="form-input">
+                                <option value="">Select Employee Type</option>
+                                <option value="Faculty" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Faculty') ? 'selected' : ''; ?>>Faculty</option>
+                                <option value="Staff" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Staff') ? 'selected' : ''; ?>>Staff</option>
+                                <option value="Administrative" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Administrative') ? 'selected' : ''; ?>>Administrative</option>
+                                <option value="Maintenance" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Maintenance') ? 'selected' : ''; ?>>Maintenance</option>
+                                <option value="Other" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Other') ? 'selected' : ''; ?>>Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Account Information Section -->
+                    <div class="form-section">
+                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
+                            <span class="icon-lock"></span> Account Information
+                        </h4>
+
+                        <div class="form-group">
+                            <label class="form-label" for="employee_password">
+                                <span class="icon-lock"></span> Password
+                            </label>
+                            <div class="password-input-container">
+                                <input type="password" 
+                                       name="password" 
+                                       id="employee_password" 
+                                       placeholder="Create a strong password"
+                                       class="form-input" 
+                                       required>
+                                <button type="button" class="password-toggle-btn" id="employeePasswordToggle" title="Show password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="employee_confirm_password">
+                                <span class="icon-check-circle"></span> Confirm Password
+                            </label>
+                            <div class="password-input-container">
+                                <input type="password" 
+                                       name="confirm_password" 
+                                       id="employee_confirm_password" 
+                                       placeholder="Re-enter password"
+                                       class="form-input" 
+                                       required>
+                                <button type="button" class="password-toggle-btn" id="employeeConfirmPasswordToggle" title="Show password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" name="register_employee" class="btn btn-primary" style="width: 100%; margin-bottom: 16px; font-size: 18px; padding: 12px;">
+                        <span class="icon-person-check"></span> Register as Employee
+                    </button>
+                </form>
+                
+                <div class="text-center">
+                    <span style="color: var(--gray-600);">Already have an account?</span>
+                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeEmployeeRegistrationModal(); openLoginModal();">Back to Login</a>
+                    <span style="color: var(--gray-600); margin: 0 8px;">or</span>
+                    <a href="#" style="color: var(--red-800); font-weight: 600; text-decoration: none;" onclick="closeEmployeeRegistrationModal(); openRegisterOptionsModal();">Choose Different Account Type</a>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Floating Login Button -->
     <button class="floating-btn" onclick="openLoginModal()" title="Login">
@@ -2142,15 +2519,6 @@ if (isset($_GET['logout'])) {
             }
         }
 
-        // Close mobile menu when clicking on a link
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.addEventListener('click', () => {
-                if (window.innerWidth < 768) {
-                    navLinks.classList.remove('active');
-                }
-            });
-        });
-
         // Modal functionality
         function openLoginModal() {
             document.getElementById('loginModal').classList.add('show');
@@ -2162,13 +2530,38 @@ if (isset($_GET['logout'])) {
             document.body.style.overflow = '';
         }
 
-        function openRegisterModal() {
-            document.getElementById('registerModal').classList.add('show');
+        // Registration Options Modal Functions
+        function openRegisterOptionsModal() {
+            document.getElementById('registerOptionsModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
 
-        function closeRegisterModal() {
-            document.getElementById('registerModal').classList.remove('show');
+        function closeRegisterOptionsModal() {
+            document.getElementById('registerOptionsModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // Student Registration Modal Functions
+        function openStudentRegistrationModal() {
+            closeRegisterOptionsModal();
+            document.getElementById('studentRegistrationModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeStudentRegistrationModal() {
+            document.getElementById('studentRegistrationModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // Employee Registration Modal Functions
+        function openEmployeeRegistrationModal() {
+            closeRegisterOptionsModal();
+            document.getElementById('employeeRegistrationModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeEmployeeRegistrationModal() {
+            document.getElementById('employeeRegistrationModal').classList.remove('show');
             document.body.style.overflow = '';
         }
 
@@ -2200,18 +2593,33 @@ if (isset($_GET['logout'])) {
                 });
             }
 
-            // Registration modal password toggles
-            const regPasswordToggle = document.getElementById('regPasswordToggle');
-            if (regPasswordToggle) {
-                regPasswordToggle.addEventListener('click', function() {
-                    togglePasswordVisibility('reg_password', this);
+            // Student registration password toggles
+            const studentPasswordToggle = document.getElementById('studentPasswordToggle');
+            if (studentPasswordToggle) {
+                studentPasswordToggle.addEventListener('click', function() {
+                    togglePasswordVisibility('student_password', this);
                 });
             }
 
-            const confirmPasswordToggle = document.getElementById('confirmPasswordToggle');
-            if (confirmPasswordToggle) {
-                confirmPasswordToggle.addEventListener('click', function() {
-                    togglePasswordVisibility('confirm_password', this);
+            const studentConfirmPasswordToggle = document.getElementById('studentConfirmPasswordToggle');
+            if (studentConfirmPasswordToggle) {
+                studentConfirmPasswordToggle.addEventListener('click', function() {
+                    togglePasswordVisibility('student_confirm_password', this);
+                });
+            }
+
+            // Employee registration password toggles
+            const employeePasswordToggle = document.getElementById('employeePasswordToggle');
+            if (employeePasswordToggle) {
+                employeePasswordToggle.addEventListener('click', function() {
+                    togglePasswordVisibility('employee_password', this);
+                });
+            }
+
+            const employeeConfirmPasswordToggle = document.getElementById('employeeConfirmPasswordToggle');
+            if (employeeConfirmPasswordToggle) {
+                employeeConfirmPasswordToggle.addEventListener('click', function() {
+                    togglePasswordVisibility('employee_confirm_password', this);
                 });
             }
         }
@@ -2228,7 +2636,9 @@ if (isset($_GET['logout'])) {
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeLoginModal();
-                closeRegisterModal();
+                closeRegisterOptionsModal();
+                closeStudentRegistrationModal();
+                closeEmployeeRegistrationModal();
             }
         });
 
@@ -2262,11 +2672,13 @@ if (isset($_GET['logout'])) {
             document.documentElement.style.setProperty('--vh', `${vh}px`);
         }
 
-        // Show login modal if there's a PHP error or success message
-        <?php if ((!empty($error) && !isset($_POST['register'])) || isset($login_success)): ?>
+        // Show appropriate modal based on PHP conditions
+        <?php if ((!empty($error) && !isset($_POST['register_student']) && !isset($_POST['register_employee'])) || isset($login_success)): ?>
             openLoginModal();
-        <?php elseif ((!empty($error) && isset($_POST['register'])) || !empty($success)): ?>
-            openRegisterModal();
+        <?php elseif ((!empty($error) && isset($_POST['register_student'])) || (!empty($success) && isset($_POST['register_student']))): ?>
+            openStudentRegistrationModal();
+        <?php elseif ((!empty($error) && isset($_POST['register_employee'])) || (!empty($success) && isset($_POST['register_employee']))): ?>
+            openEmployeeRegistrationModal();
         <?php endif; ?>
 
         // Auto-hide success messages

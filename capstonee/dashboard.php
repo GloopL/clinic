@@ -186,7 +186,7 @@ $stmt->execute();
         <a href="admin_panel.php" class="hover:text-yellow-200 flex items-center gap-1">
           <i class="bi bi-person-badge"></i> Admin Panel
         </a>
-        <a href="logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
+        <a href="#" onclick="openLogoutModal(event)" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
           <i class="bi bi-box-arrow-right"></i> Logout
         </a>
       </nav>
@@ -336,5 +336,49 @@ $stmt->execute();
       <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
     </div>
   </footer>
+
+  <!-- Logout Confirmation Modal -->
+  <div id="logoutModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div class="p-6">
+          <div class="flex items-center justify-center mb-4">
+            <div class="bg-red-100 p-3 rounded-full">
+              <i class="bi bi-box-arrow-right text-red-600 text-2xl"></i>
+            </div>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-800 text-center mb-2">Confirm Logout</h3>
+          <p class="text-gray-600 text-center mb-6">Are you sure you want to logout from your account?</p>
+          <div class="flex gap-3">
+            <button onclick="closeLogoutModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-300 transition">
+              Cancel
+            </button>
+            <a href="logout.php" class="flex-1 red-orange-gradient-button text-white py-3 rounded-lg font-medium text-center hover:shadow-lg transition">
+              Yes, Logout
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Logout modal functions
+  function openLogoutModal(event) {
+    event.preventDefault();
+    document.getElementById('logoutModal').classList.remove('hidden');
+  }
+
+  function closeLogoutModal() {
+    document.getElementById('logoutModal').classList.add('hidden');
+  }
+
+  // Close logout modal when clicking outside
+  document.getElementById('logoutModal').addEventListener('click', function(e) {
+    if (e.target.id === 'logoutModal') {
+      closeLogoutModal();
+    }
+  });
+  </script>
 </body>
 </html>
