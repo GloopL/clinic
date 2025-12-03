@@ -33,6 +33,18 @@ if (isset($_SESSION['username'])) {
             $now = new DateTime();
             $patient_data['age'] = $now->diff($dob)->y;
         }
+        
+        // Create middle initial
+        $patient_data['middle_initial'] = !empty($patient_data['middle_name']) ? substr($patient_data['middle_name'], 0, 1) . '.' : '';
+        
+        // Create formatted name with proper capitalization
+        $patient_data['first_name_cap'] = ucwords(strtolower($patient_data['first_name']));
+        $patient_data['middle_initial_cap'] = !empty($patient_data['middle_initial']) ? strtoupper($patient_data['middle_initial'][0]) . '.' : '';
+        $patient_data['last_name_cap'] = ucwords(strtolower($patient_data['last_name']));
+        
+        $patient_data['full_name_formatted'] = $patient_data['first_name_cap'] . 
+                                              (!empty($patient_data['middle_initial_cap']) ? ' ' . $patient_data['middle_initial_cap'] : '') . 
+                                              ' ' . $patient_data['last_name_cap'];
     }
     $stmt->close();
 }
@@ -180,6 +192,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             margin-bottom: 2rem;
         }
         
+        /* Form field styling */
+        .auto-filled {
+            background-color: #f0fff4 !important;
+            border-color: #68d391 !important;
+        }
+        .manual-input {
+            background-color: #fff7ed !important;
+            border-color: #fed7aa !important;
+        }
+        
         /* Print Styles - Hide navigation, buttons, and non-form elements */
         @media print {
             /* Hide navigation bar, header, and any includes */
@@ -292,76 +314,207 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <?php endif; ?>
                     
                     <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" id="medicalForm">
+                        <!-- Hidden fields for auto-filled data -->
+                        <input type="hidden" id="first_name" name="first_name" value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>">
+                        <input type="hidden" id="middle_name" name="middle_name" value="<?php echo isset($patient_data['middle_name']) ? htmlspecialchars(ucwords(strtolower($patient_data['middle_name']))) : ''; ?>">
+                        <input type="hidden" id="last_name" name="last_name" value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>">
+                        <input type="hidden" id="sex" name="sex" value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>">
+                        <input type="hidden" id="student_id" name="student_id" value="<?php echo isset($patient_data['student_id']) ? htmlspecialchars($patient_data['student_id']) : ''; ?>">
+                        
                         <!-- Personal Info - Student Section -->
                         <div class="student-section rounded-lg p-6 mb-8">
                             <h3 class="text-lg font-bold text-blue-700 mb-4">Personal Information</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                <div>
-                                    <label class="block text-xs font-semibold">Last Name</label>
-                                    <input type="text" name="last_name" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['last_name'] ?? ''); ?>" required>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Last Name</label>
+                                    <input type="text" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['last_name_cap'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Student ID</label>
-                                    <input type="text" name="student_id" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['student_id'] ?? ''); ?>" required>
+                                
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">First Name</label>
+                                    <input type="text" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['first_name_cap'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Date</label>
-                                    <input type="date" name="date_of_examination" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo date('Y-m-d'); ?>" required>
+                                
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Middle Name</label>
+                                    <input type="text" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo isset($patient_data['middle_name']) ? htmlspecialchars(ucwords(strtolower($patient_data['middle_name']))) : ''; ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['middle_name'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                <div>
-                                    <label class="block text-xs font-semibold">First Name</label>
-                                    <input type="text" name="first_name" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['first_name'] ?? ''); ?>" required>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Sex</label>
+                                    <input type="text" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['sex'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Birthday</label>
-                                    <input type="date" name="date_of_birth" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['date_of_birth'] ?? ''); ?>" required>
+                                
+                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                    <label class="block text-xs font-semibold text-orange-700">Cellphone No.</label>
+                                    <input type="text" 
+                                           name="cellphone_no" 
+                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                           value="<?php echo htmlspecialchars($patient_data['contact_number'] ?? ''); ?>">
+                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your cellphone number
+                                    </p>
+                                </div>
+                                
+                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                    <label class="block text-xs font-semibold text-orange-700">Address</label>
+                                    <input type="text" 
+                                           name="address" 
+                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                           value="<?php echo htmlspecialchars($patient_data['address'] ?? ''); ?>">
+                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your address
+                                    </p>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                <div>
-                                    <label class="block text-xs font-semibold">Middle Name</label>
-                                    <input type="text" name="middle_name" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['middle_name'] ?? ''); ?>">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Date</label>
+                                    <input type="date" 
+                                           name="date_of_examination" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo date('Y-m-d'); ?>" 
+                                           required>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <i class="bi bi-info-circle mr-1"></i> Today's date
+                                    </p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Age</label>
-                                    <input type="number" name="age" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['age'] ?? ''); ?>" required>
+                                
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Birthday</label>
+                                    <input type="date" 
+                                           name="date_of_birth" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo htmlspecialchars($patient_data['date_of_birth'] ?? ''); ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['date_of_birth'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
+                                    </p>
+                                </div>
+                                
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Age</label>
+                                    <input type="number" 
+                                           name="age" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo htmlspecialchars($patient_data['age'] ?? ''); ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['age'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-calculated
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not available
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                <div>
-                                    <label class="block text-xs font-semibold">Sex</label>
-                                    <select name="sex" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" required>
-                                        <option value="">Select</option>
-                                        <option value="Male" <?php echo (isset($patient_data['sex']) && $patient_data['sex'] == 'Male') ? 'selected' : ''; ?>>Male</option>
-                                        <option value="Female" <?php echo (isset($patient_data['sex']) && $patient_data['sex'] == 'Female') ? 'selected' : ''; ?>>Female</option>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                    <label class="block text-xs font-semibold text-orange-700">Civil Status</label>
+                                    <select name="civil_status" 
+                                            class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                            required>
+                                        <option value="">Select Civil Status</option>
+                                        <option value="Single" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
+                                        <option value="Married" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Married') ? 'selected' : ''; ?>>Married</option>
+                                        <option value="Widowed" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Widowed') ? 'selected' : ''; ?>>Widowed</option>
+                                        <option value="Separated" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Separated') ? 'selected' : ''; ?>>Separated</option>
+                                        <option value="Divorced" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Divorced') ? 'selected' : ''; ?>>Divorced</option>
                                     </select>
+                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
+                                        <i class="bi bi-pencil-square mr-1"></i> Please select your civil status
+                                    </p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Civil Status</label>
-                                    <input type="text" name="civil_status" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['civil_status'] ?? ''); ?>">
+                                
+                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                    <label class="block text-xs font-semibold text-orange-700">Tel. No.</label>
+                                    <input type="text" 
+                                           name="tel_no" 
+                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter telephone number
+                                    </p>
+                                </div>
+                                
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Position/Program/Campus</label>
+                                    <input type="text" 
+                                           name="program" 
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
+                                           value="<?php echo htmlspecialchars($patient_data['program'] ?? ''); ?>" 
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['program'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                <div>
-                                    <label class="block text-xs font-semibold">Cellphone No.</label>
-                                    <input type="text" name="cellphone_no" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['contact_number'] ?? ''); ?>">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Tel. No.</label>
-                                    <input type="text" name="tel_no" class="w-full rounded border border-gray-300 px-2 py-1 text-xs">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                <div>
-                                    <label class="block text-xs font-semibold">Address</label>
-                                    <input type="text" name="address" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['address'] ?? ''); ?>">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold">Position/Program/Campus</label>
-                                    <input type="text" name="program" class="w-full rounded border border-gray-300 px-2 py-1 text-xs" value="<?php echo htmlspecialchars($patient_data['program'] ?? ''); ?>">
-                                </div>
+                            
+                            <!-- Information Legend -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                                <h5 class="text-sm font-bold text-blue-700 mb-2 flex items-center">
+                                    <i class="bi bi-info-circle-fill mr-2"></i> Form Information
+                                </h5>
+                                <p class="text-blue-600 text-xs mb-1">
+                                    <i class="bi bi-check-circle-fill text-green-500 mr-1"></i> 
+                                    <span class="font-semibold">Green fields</span> are auto-filled from your registration.
+                                </p>
+                                <p class="text-blue-600 text-xs">
+                                    <i class="bi bi-pencil-square text-orange-500 mr-1"></i> 
+                                    <span class="font-semibold">Orange fields</span> require manual input.
+                                </p>
                             </div>
                         </div>
                     <?php if ($is_staff_user): ?>
@@ -539,7 +692,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <!-- Data Privacy Act Notice -->
                         <div class="border-2 border-red-400 rounded-lg bg-white shadow p-4 mb-6">
                             <p class="text-xs text-gray-600 mb-2">Pursuant to Republic Act No. 10173, also known as the Data Privacy Act of 2012, the Batangas State University, the National Engineering University, recognizes its commitment to protect and respect the privacy of its customers and/or stakeholders and ensure that all information collected from them are all processed in accordance with the principles of transparency, legitimate purpose and proportionality mandated under the Data Privacy Act of 2012.</p>
-                            <p class="text-xs text-gray-600 mb-2">This certificate does not cover conditions or diseases that will require procedure and examination for their detection and also those which are asymptomatic at the time of examination. Valid only for three (3) months from the date of examination.</p>
                         </div>
                         <div class="flex flex-col md:flex-row gap-4 justify-end mt-8 no-print">
                             <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition">Submit Form</button>

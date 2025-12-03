@@ -1207,28 +1207,8 @@ function generateDefaultAvatar($username) {
 
     // Enhanced medical form function
     function enhanceMedicalForm(form) {
-        // Add staff notice for medical form
-        const medicalNotice = `
-            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-exclamation-triangle text-yellow-400 text-xl"></i>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-yellow-700">
-                            <strong>Medical Examination Notice:</strong> This form contains sections that must be completed by medical professionals. 
-                            Only fill out the basic information sections. Physical examination and assessment will be done by clinic staff.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `;
         
-        // Insert medical-specific notice
-        const existingNotice = form.querySelector('.bg-blue-50');
-        if (existingNotice) {
-            existingNotice.insertAdjacentHTML('afterend', medicalNotice);
-        }
+      
     }
 
     // History form: handle female-only Question 11 (menstrual_age)

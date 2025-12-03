@@ -26,6 +26,40 @@ $error_message = '';
 $user_role = $_SESSION['role'] ?? 'student';
 $is_staff_user = in_array($user_role, ['dentist', 'doctor', 'nurse', 'staff', 'admin']);
 
+// Get patient data if user is logged in
+$patient_data = null;
+if (isset($_SESSION['username'])) {
+    $stmt = $conn->prepare("SELECT * FROM patients WHERE student_id = ?");
+    if ($stmt) {
+        $stmt->bind_param("s", $_SESSION['username']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            $patient_data = $result->fetch_assoc();
+            
+            // Calculate age from date_of_birth if age is not set or empty
+            if (empty($patient_data['age']) && !empty($patient_data['date_of_birth'])) {
+                $dob = new DateTime($patient_data['date_of_birth']);
+                $now = new DateTime();
+                $patient_data['age'] = $now->diff($dob)->y;
+            }
+            
+            // Create middle initial
+            $patient_data['middle_initial'] = !empty($patient_data['middle_name']) ? substr($patient_data['middle_name'], 0, 1) . '.' : '';
+            
+            // Create formatted name with proper capitalization
+            $patient_data['first_name_cap'] = ucwords(strtolower($patient_data['first_name']));
+            $patient_data['middle_initial_cap'] = !empty($patient_data['middle_initial']) ? strtoupper($patient_data['middle_initial'][0]) . '.' : '';
+            $patient_data['last_name_cap'] = ucwords(strtolower($patient_data['last_name']));
+            
+            $patient_data['full_name_formatted'] = $patient_data['first_name_cap'] . 
+                                                  (!empty($patient_data['middle_initial_cap']) ? ' ' . $patient_data['middle_initial_cap'] : '') . 
+                                                  ' ' . $patient_data['last_name_cap'];
+        }
+        $stmt->close();
+    }
+}
+
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $student_id = trim($_POST['student_id'] ?? '');
@@ -36,8 +70,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $sex = trim($_POST['sex'] ?? '');
     $program = trim($_POST['program'] ?? '');
     $year_level = trim($_POST['year_level'] ?? '');
-    $student_signature = trim($_POST['student_signature'] ?? '');
-    $student_date = trim($_POST['student_date'] ?? '');
+    $civil_status = trim($_POST['civil_status'] ?? '');
+    $address = trim($_POST['address'] ?? '');
 
     // ✅ Step 1: Check if patient already exists by student_id
     $stmt = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
@@ -52,9 +86,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         // ✅ Step 2: Create new patient if not found
         $stmt = $conn->prepare("INSERT INTO patients 
-            (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssssss", $student_id, $first_name, $middle_name, $last_name, $date_of_birth, $sex, $program, $year_level);
+            (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level, civil_status, address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssssssssss", $student_id, $first_name, $middle_name, $last_name, $date_of_birth, $sex, $program, $year_level, $civil_status, $address);
 
         if ($stmt->execute()) {
             $patient_id = $conn->insert_id;
@@ -65,11 +99,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // ✅ Step 3: Create a new medical record entry
     if (!empty($patient_id)) {
-        $stmt = $conn->prepare("INSERT INTO medical_records (patient_id, record_type, examination_date, physician_name, student_signature, student_date)
-                                VALUES (?, 'dental_exam', ?, ?, ?, ?)");
+        $stmt = $conn->prepare("INSERT INTO medical_records (patient_id, record_type, examination_date, physician_name)
+                                VALUES (?, 'dental_exam', ?, ?)");
         $examination_date = date('Y-m-d');
         $physician_name = $_POST['dentist_name'] ?? '';
-        $stmt->bind_param("issss", $patient_id, $examination_date, $physician_name, $student_signature, $student_date);
+        $stmt->bind_param("iss", $patient_id, $examination_date, $physician_name);
 
         if ($stmt->execute()) {
             $record_id = $conn->insert_id;
@@ -284,6 +318,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 display: none !important;
             }
         }
+        .auto-filled {
+            background-color: #f0fff4 !important;
+            border-color: #68d391 !important;
+        }
+        .manual-input {
+            background-color: #fff7ed !important;
+            border-color: #fed7aa !important;
+        }
     </style>
 </head>
 <body>
@@ -309,55 +351,164 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="alert alert-danger"><?php echo $error_message; ?></div>
                     <?php endif; ?>
                     <form id="userDentalForm" method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
+                        <!-- Hidden fields for auto-filled data -->
+                        <input type="hidden" id="first_name" name="first_name" value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>">
+                        <input type="hidden" id="middle_name" name="middle_name" value="<?php echo isset($patient_data['middle_name']) ? htmlspecialchars(ucwords(strtolower($patient_data['middle_name']))) : ''; ?>">
+                        <input type="hidden" id="last_name" name="last_name" value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>">
+                        <input type="hidden" id="sex" name="sex" value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>">
+                        
                         <!-- Patient Information Section -->
-                     <!-- Patient Information Section -->
-<h5 class="text-lg font-bold text-blue-700 mb-4">Patient Information</h5>
+                        <h5 class="text-lg font-bold text-blue-700 mb-4">Patient Information</h5>
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    <div>
-        <label for="student_id" class="block font-medium mb-1">Student ID</label>
-        <input type="text" class="w-full rounded border border-gray-300 px-3 py-2" id="student_id" name="student_id" required>
-    </div>
-    <div>
-        <label for="program" class="block font-medium mb-1">Program</label>
-        <input type="text" class="w-full rounded border border-gray-300 px-3 py-2" id="program" name="program" required>
-    </div>
-</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <label class="block font-medium mb-2 text-green-700">
+                                    <i class="bi bi-person-circle mr-2"></i>Name
+                                </label>
+                                <input type="text" 
+                                       class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800 capitalize" 
+                                       id="display_name" 
+                                       value="<?php echo isset($patient_data['full_name_formatted']) ? htmlspecialchars($patient_data['full_name_formatted']) : ''; ?>" 
+                                       readonly>
+                                <p class="text-xs text-green-600 mt-2 flex items-center">
+                                    <?php if (isset($patient_data['full_name_formatted'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-exclamation-triangle mr-1"></i> Please complete your registration first
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            
+                            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <label for="program_display" class="block font-medium mb-2 text-green-700">
+                                    <i class="bi bi-mortarboard mr-2"></i>Program
+                                </label>
+                                <input type="text" 
+                                       class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
+                                       id="program_display" 
+                                       name="program" 
+                                       value="<?php echo isset($patient_data['program']) ? htmlspecialchars($patient_data['program']) : ''; ?>" 
+                                       <?php echo isset($patient_data['program']) ? 'readonly' : 'required'; ?>>
+                                <p class="text-xs text-green-600 mt-2 flex items-center">
+                                    <?php if (isset($patient_data['program'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your program
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                        </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-    <div>
-        <label for="first_name" class="block font-medium mb-1">First Name</label>
-        <input type="text" class="w-full rounded border border-gray-300 px-3 py-2" id="first_name" name="first_name" required>
-    </div>
-    <div>
-        <label for="middle_name" class="block font-medium mb-1">Middle Name</label>
-        <input type="text" class="w-full rounded border border-gray-300 px-3 py-2" id="middle_name" name="middle_name">
-    </div>
-    <div>
-        <label for="last_name" class="block font-medium mb-1">Last Name</label>
-        <input type="text" class="w-full rounded border border-gray-300 px-3 py-2" id="last_name" name="last_name" required>
-    </div>
-</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <label class="block font-medium mb-2 text-green-700">
+                                    <i class="bi bi-person-badge mr-2"></i>SR Code / Student ID
+                                </label>
+                                <input type="text" 
+                                       class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-semibold text-green-800" 
+                                       id="student_id" 
+                                       name="student_id" 
+                                       value="<?php echo isset($patient_data['student_id']) ? htmlspecialchars($patient_data['student_id']) : ''; ?>" 
+                                       <?php echo isset($patient_data['student_id']) ? 'readonly' : 'required'; ?>>
+                                <p class="text-xs text-green-600 mt-2 flex items-center">
+                                    <?php if (isset($patient_data['student_id'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your SR Code
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            
+                            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <label class="block font-medium mb-2 text-green-700">
+                                    <i class="bi bi-gender-ambiguous mr-2"></i>Sex
+                                </label>
+                                <input type="text" 
+                                       class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
+                                       id="sex_display" 
+                                       value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>" 
+                                       readonly>
+                                <p class="text-xs text-green-600 mt-2 flex items-center">
+                                    <?php if (isset($patient_data['sex'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-pencil-square mr-1"></i> Please complete your registration
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                        </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-    <div>
-        <label for="date_of_birth" class="block font-medium mb-1">Date of Birth</label>
-        <input type="date" class="w-full rounded border border-gray-300 px-3 py-2" id="date_of_birth" name="date_of_birth" required>
-    </div>
-    <div>
-        <label class="block font-medium mb-1">Sex</label>
-        <select name="sex" id="sex" class="w-full rounded border border-gray-300 px-3 py-2" required>
-            <option value="">Select</option>
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-        </select>
-    </div>
-    <div>
-        <label for="year_level" class="block font-medium mb-1">Year Level</label>
-        <input type="text" class="w-full rounded border border-gray-300 px-3 py-2" id="year_level" name="year_level" required>
-    </div>
-</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <label class="block font-medium mb-2 text-green-700">
+                                    <i class="bi bi-calendar2-heart mr-2"></i>Age
+                                </label>
+                                <input type="number" 
+                                       class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
+                                       id="age_display" 
+                                       value="<?php echo isset($patient_data['age']) ? htmlspecialchars($patient_data['age']) : ''; ?>" 
+                                       readonly>
+                                <p class="text-xs text-green-600 mt-2 flex items-center">
+                                    <?php if (isset($patient_data['age'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-calculated from your date of birth
+                                    <?php else: ?>
+                                        <i class="bi bi-pencil-square mr-1"></i> Please complete your registration
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            
+                            <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                <label for="civil_status" class="block font-medium mb-2 text-orange-700">
+                                    <i class="bi bi-person-heart mr-2"></i>Civil Status
+                                </label>
+                                <select class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                        id="civil_status" 
+                                        name="civil_status" 
+                                        required>
+                                    <option value="">Select Civil Status</option>
+                                    <option value="Single" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
+                                    <option value="Married" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Married') ? 'selected' : ''; ?>>Married</option>
+                                    <option value="Widowed" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Widowed') ? 'selected' : ''; ?>>Widowed</option>
+                                    <option value="Separated" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Separated') ? 'selected' : ''; ?>>Separated</option>
+                                    <option value="Divorced" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Divorced') ? 'selected' : ''; ?>>Divorced</option>
+                                </select>
+                                <p class="text-xs text-orange-600 mt-2 flex items-center">
+                                    <i class="bi bi-pencil-square mr-1"></i> Please select your civil status
+                                </p>
+                            </div>
+                        </div>
 
+                        <div class="mb-6">
+                            <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                <label for="address" class="block font-medium mb-2 text-orange-700">
+                                    <i class="bi bi-geo-alt mr-2"></i>Address
+                                </label>
+                                <textarea class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                          id="address" 
+                                          name="address" 
+                                          rows="3" 
+                                          placeholder="Enter your complete address" 
+                                          required><?php echo isset($patient_data['address']) ? htmlspecialchars($patient_data['address']) : ''; ?></textarea>
+                                <p class="text-xs text-orange-600 mt-2 flex items-center">
+                                    <i class="bi bi-pencil-square mr-1"></i> Please enter your complete address
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Information Legend -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                            <h5 class="text-lg font-bold text-blue-700 mb-2 flex items-center">
+                                <i class="bi bi-info-circle-fill mr-2"></i> Form Information
+                            </h5>
+                            <p class="text-blue-600 mb-1">
+                                <i class="bi bi-check-circle-fill text-green-500 mr-1"></i> 
+                                <span class="font-semibold">Green fields</span> are auto-filled from your registration.
+                            </p>
+                            <p class="text-blue-600">
+                                <i class="bi bi-pencil-square text-orange-500 mr-1"></i> 
+                                <span class="font-semibold">Orange fields</span> require manual input.
+                            </p>
+                        </div>
 
                         <?php if ($is_staff_user): ?>
                         <!-- Dentition Status and Treatment Needs -->
@@ -529,36 +680,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         </div>
                         <?php endif; ?>
 
-                        <!-- Student Certification Section -->
-                        <h5 class="mt-8 mb-4 text-lg font-bold text-blue-700">Student Certification</h5>
-                        <div class="mb-6">
-                            <p class="mb-4">I hereby certify that the above information given are true and correct as to the best of my knowledge.</p>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label for="student_signature" class="block font-medium mb-1">Signature over Printed Name of Student</label>
-                                    <input type="text" class="w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" id="student_signature" name="student_signature" placeholder="Enter your full name" required>
-                                </div>
-                                <div>
-                                    <label for="student_date" class="block font-medium mb-1">Date</label>
-                                    <input type="date" class="w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" id="student_date" name="student_date" value="<?php echo date('Y-m-d'); ?>" required>
-                                </div>
-                            </div>
-                            <div class="mt-6">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <h6 class="font-semibold text-sm text-gray-700 mb-0">Digital Signature</h6>
-                                    <span class="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Student Access</span>
-                                </div>
-                                <div class="signature-pad-wrapper">
-                                    <canvas id="studentSignatureCanvas" class="signature-pad-canvas" aria-label="Digital signature canvas"></canvas>
-                                </div>
-                                <div class="signature-actions flex flex-wrap gap-3 mt-3">
-                                    <button type="button" id="clearSignature" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 transition">Clear Signature</button>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">Use your mouse or finger (on touch devices) to draw your signature. Your signature will appear on printouts.</p>
-                                <input type="hidden" name="student_signature_data" id="student_signature_data">
-                            </div>
-                        </div>
-
                         <?php if ($is_staff_user): ?>
                         <!-- Dentist Certification Section -->
                         <h5 class="mt-8 mb-4 text-lg font-bold text-blue-700">Dentist Certification (For Dentist Use Only)</h5>
@@ -588,7 +709,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             
                         <div class="flex flex-col md:flex-row gap-4 justify-end mt-8">
                             <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition">Submit Form</button>
-                            <!-- <button type="button" class="bg-green-500 text-white font-semibold px-6 py-2 rounded-lg shadow hover:bg-green-600 transition" id="generateQR">Generate QR Code</button> -->
                         </div>
                         </form>
                     </div>
@@ -626,225 +746,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             let currentTool = 'caries';
             let dentalChartData = {};
             
-            // Digital Signature Canvas Setup
-            let signatureCanvas = null;
-            let canvasContext = null;
-            let drawing = false;
-            let lastX = 0;
-            let lastY = 0;
+            // Digital Signature Canvas Setup - Removed since Student Certification is removed
+            // All related signature code has been removed
             
-            function initSignatureCanvas() {
-                signatureCanvas = document.getElementById('studentSignatureCanvas');
-                if (!signatureCanvas) {
-                    console.error('Signature canvas not found');
-                    return false;
-                }
-                
-                canvasContext = signatureCanvas.getContext('2d');
-                if (!canvasContext) {
-                    console.error('Could not get canvas context');
-                    return false;
-                }
-                
-                // Set canvas size
-                const wrapper = signatureCanvas.parentElement;
-                const wrapperWidth = wrapper.offsetWidth || wrapper.getBoundingClientRect().width;
-                signatureCanvas.width = wrapperWidth;
-                signatureCanvas.height = 180;
-                
-                // Set drawing properties
-                canvasContext.lineWidth = 2;
-                canvasContext.lineCap = 'round';
-                canvasContext.lineJoin = 'round';
-                canvasContext.strokeStyle = '#1f2937';
-                canvasContext.fillStyle = '#ffffff';
-                
-                // Clear canvas with white background
-                canvasContext.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
-                
-                return true;
-            }
-            
-            function getCanvasCoordinates(event) {
-                if (!signatureCanvas) return { x: 0, y: 0 };
-                
-                const rect = signatureCanvas.getBoundingClientRect();
-                const scaleX = signatureCanvas.width / rect.width;
-                const scaleY = signatureCanvas.height / rect.height;
-                
-                let clientX, clientY;
-                
-                if (event.touches && event.touches.length > 0) {
-                    clientX = event.touches[0].clientX;
-                    clientY = event.touches[0].clientY;
-                } else if (event.changedTouches && event.changedTouches.length > 0) {
-                    clientX = event.changedTouches[0].clientX;
-                    clientY = event.changedTouches[0].clientY;
-                } else {
-                    clientX = event.clientX;
-                    clientY = event.clientY;
-                }
-                
-                return {
-                    x: (clientX - rect.left) * scaleX,
-                    y: (clientY - rect.top) * scaleY
-                };
-            }
-            
-            function updateSignaturePreview() {
-                if (!signatureCanvas) return;
-                
-                const blank = document.createElement('canvas');
-                blank.width = signatureCanvas.width;
-                blank.height = signatureCanvas.height;
-                const blankCtx = blank.getContext('2d');
-                blankCtx.fillStyle = '#ffffff';
-                blankCtx.fillRect(0, 0, blank.width, blank.height);
-                
-                if (signatureCanvas.toDataURL() === blank.toDataURL()) {
-                    $('#student_signature_data').val('');
-                    return;
-                }
-                
-                const dataUrl = signatureCanvas.toDataURL('image/png');
-                $('#student_signature_data').val(dataUrl);
-            }
-            
-            function startDrawing(event) {
-                if (!canvasContext) return;
-                
-                drawing = true;
-                const coords = getCanvasCoordinates(event);
-                lastX = coords.x;
-                lastY = coords.y;
-                
-                canvasContext.beginPath();
-                canvasContext.moveTo(lastX, lastY);
-                
-                if (event.preventDefault) event.preventDefault();
-                return false;
-            }
-            
-            function draw(event) {
-                if (!drawing || !canvasContext || !signatureCanvas) return;
-                
-                const coords = getCanvasCoordinates(event);
-                canvasContext.lineTo(coords.x, coords.y);
-                canvasContext.stroke();
-                
-                lastX = coords.x;
-                lastY = coords.y;
-                
-                if (event.preventDefault) event.preventDefault();
-                return false;
-            }
-            
-            function stopDrawing(event) {
-                if (!drawing) return;
-                
-                drawing = false;
-                updateSignaturePreview();
-                
-                if (event && event.preventDefault) event.preventDefault();
-                return false;
-            }
-            
-            // Initialize canvas when DOM is ready - try multiple times if needed (for modals)
-            function initializeSignatureCanvasWithRetry(retries = 10) {
-                if (initSignatureCanvas()) {
-                    console.log('Signature canvas initialized successfully');
-                    
-                    // Mouse events
-                    signatureCanvas.addEventListener('mousedown', startDrawing);
-                    signatureCanvas.addEventListener('mousemove', draw);
-                    signatureCanvas.addEventListener('mouseup', stopDrawing);
-                    signatureCanvas.addEventListener('mouseout', stopDrawing);
-                    signatureCanvas.addEventListener('mouseleave', stopDrawing);
-                    
-                    // Touch events
-                    signatureCanvas.addEventListener('touchstart', function(e) {
-                        e.preventDefault();
-                        startDrawing(e);
-                    }, { passive: false });
-                    
-                    signatureCanvas.addEventListener('touchmove', function(e) {
-                        e.preventDefault();
-                        draw(e);
-                    }, { passive: false });
-                    
-                    signatureCanvas.addEventListener('touchend', function(e) {
-                        e.preventDefault();
-                        stopDrawing(e);
-                    }, { passive: false });
-                    
-                    signatureCanvas.addEventListener('touchcancel', function(e) {
-                        e.preventDefault();
-                        stopDrawing(e);
-                    }, { passive: false });
-                    
-                    // Handle window resize
-                    let resizeTimeout;
-                    window.addEventListener('resize', function() {
-                        clearTimeout(resizeTimeout);
-                        resizeTimeout = setTimeout(function() {
-                            if (signatureCanvas) {
-                                const previous = signatureCanvas.toDataURL();
-                                initSignatureCanvas();
-                                if (previous && previous !== signatureCanvas.toDataURL()) {
-                                    const img = new Image();
-                                    img.onload = function() {
-                                        canvasContext.drawImage(img, 0, 0, signatureCanvas.width, signatureCanvas.height);
-                                        updateSignaturePreview();
-                                    };
-                                    img.src = previous;
-                                }
-                            }
-                        }, 250);
-                    });
-                    
-                    // Clear signature button
-                    $('#clearSignature').off('click').on('click', function(e) {
-                        e.preventDefault();
-                        if (!canvasContext || !signatureCanvas) return;
-                        
-                        canvasContext.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
-                        canvasContext.fillStyle = '#ffffff';
-                        canvasContext.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
-                        
-                        $('#student_signature_data').val('');
-                    });
-                    
-                    return true;
-                } else if (retries > 0) {
-                    console.log('Canvas not found, retrying... (' + retries + ' retries left)');
-                    setTimeout(function() {
-                        initializeSignatureCanvasWithRetry(retries - 1);
-                    }, 200);
-                    return false;
-                } else {
-                    console.error('Failed to initialize signature canvas after all retries');
-                    return false;
-                }
-            }
-            
-            // Start initialization
-            setTimeout(function() {
-                initializeSignatureCanvasWithRetry();
-            }, 100);
-            
-            // Also try when modal is shown (if using Bootstrap modals)
-            $(document).on('shown.bs.modal', function() {
-                setTimeout(function() {
-                    if (!canvasContext) {
-                        initializeSignatureCanvasWithRetry(5);
-                    }
-                }, 100);
-            });
-
-            $('#userDentalForm').on('submit', function(e) {
-                updateSignaturePreview();
-            });
-
             $('.tooth').click(function() {
                 const toothId = $(this).data('tooth');
                 $(this).toggleClass('selected');
@@ -873,34 +777,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     case 'for extraction': currentTool = 'extraction'; break;
                     case 'impacted': currentTool = 'impacted'; break;
                 }
-            });
-            // Generate QR code (same logic as history_form.php)
-            $('#generateQR').click(function() {
-                var studentId = $('#student_id').val();
-                var name = $('#first_name').val() + ' ' + $('#last_name').val();
-                var formType = 'Dental Examination Form';
-                var date = $('#date_of_examination').val();
-                if (!studentId || !name) {
-                    alert('Please fill in student ID and name fields first.');
-                    return;
-                }
-                var qrData = 'Student ID: ' + studentId + '\nName: ' + name + '\nForm: ' + formType + '\nDate: ' + date;
-                $('#qrcode').empty();
-                new QRCode(document.getElementById("qrcode"), {
-                    text: qrData,
-                    width: 200,
-                    height: 200
-                });
-                $('#qrCodeModal').modal('show');
-            });
-            // Download QR code
-            $('#downloadQR').click(function() {
-                var canvas = document.querySelector("#qrcode canvas");
-                var image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-                var link = document.createElement('a');
-                link.download = 'qrcode.png';
-                link.href = image;
-                link.click();
             });
             
             // Prevent interaction with dentist-only sections
