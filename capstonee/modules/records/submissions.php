@@ -116,6 +116,9 @@ if ($type && $id) {
         }
     }
 
+    // Add filter to show only verified forms
+    $filter_sql .= " AND mr.verification_status = 'verified'";
+
     $records = $conn->query("
         SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status,
                p.first_name, p.last_name, p.student_id
@@ -249,7 +252,7 @@ if ($type && $id) {
                <i class="bi bi-arrow-left-circle"></i> Back to Dashboard
             </a>
             <div class="text-right">
-                <h2 class="text-2xl font-bold text-orange-700">Verify Submissions</h2>
+                <h2 class="text-2xl font-bold text-orange-700">Consult</h2>
                 <span class="px-3 py-1 rounded-full text-sm font-semibold mt-1 inline-block role-badge role-badge-<?= $user_role ?>">
                     <i class="bi bi-person-check"></i> <?= ucfirst($user_role) ?> Mode
                 </span>
@@ -395,7 +398,7 @@ if ($type && $id) {
                         class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
                     <i class="bi bi-x-circle"></i> Reject Submission
                 </button>
-                <a href="verify_submission.php?type=<?= $type ?>"
+                <a href="submissions.php?type=<?= $type ?>"
                    class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
                    <i class="bi bi-arrow-left"></i> Back to List
                 </a>
@@ -412,16 +415,16 @@ if ($type && $id) {
                 </h3>
                 <div class="flex gap-2">
                     <?php if (in_array('history_form', $allowed_types)): ?>
-                        <a href="verify_submission.php?type=history_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">History Forms</a>
+                        <a href="submissions.php?type=history_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">History Forms</a>
                     <?php endif; ?>
                     <?php if (in_array('medical_exam', $allowed_types)): ?>
-                        <a href="verify_submission.php?type=medical_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Medical Exams</a>
+                        <a href="submissions.php?type=medical_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Medical Exams</a>
                     <?php endif; ?>
                     <?php if (in_array('dental_exam', $allowed_types)): ?>
-                        <a href="verify_submission.php?type=dental_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Dental Exams</a>
+                        <a href="submissions.php?type=dental_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Dental Exams</a>
                     <?php endif; ?>
                     <?php if (count($allowed_types) > 1): ?>
-                        <a href="verify_submission.php" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">All Submissions</a>
+                        <a href="submissions.php" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">All Submissions</a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -466,7 +469,7 @@ if ($type && $id) {
                                         default => 'history_form'
                                     };
                                     ?>
-                                    <a href="verify_submission.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
+                                    <a href="submissions.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
                                        class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
                                        <i class="bi bi-eye"></i> Review & Verify
                                     </a>

@@ -121,7 +121,7 @@ if ($type && $id) {
                p.first_name, p.last_name, p.student_id
         FROM medical_records mr
         JOIN patients p ON mr.patient_id = p.id
-        $filter_sql
+        $filter_sql AND mr.verification_status NOT IN ('verified', 'rejected')
         ORDER BY mr.created_at DESC
     ");
 }
@@ -402,12 +402,17 @@ if ($type && $id) {
             </form>
 
         <!-- ✅ All Submissions List -->
-        <?php elseif ($records && $records->num_rows > 0): ?>
+                <!-- ✅ All Submissions List -->
+        <?php else: ?>
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-semibold text-orange-800">
                     <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' Submissions' : 'All Submissions'; ?>
                     <span class="text-sm font-normal text-gray-600 ml-2">
-                        (<?= $records->num_rows ?> record<?= $records->num_rows !== 1 ? 's' : '' ?>)
+                        <?php if ($records): ?>
+                            (<?= $records->num_rows ?> record<?= $records->num_rows !== 1 ? 's' : '' ?>)
+                        <?php else: ?>
+                            (0 records)
+                        <?php endif; ?>
                     </span>
                 </h3>
                 <div class="flex gap-2">
@@ -426,69 +431,71 @@ if ($type && $id) {
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="min-w-full border border-orange-200 text-sm rounded-lg overflow-hidden">
-                    <thead class="red-orange-table-header text-white">
-                        <tr>
-                            <th class="py-3 px-4">Student ID</th>
-                            <th class="py-3 px-4">Name</th>
-                            <th class="py-3 px-4">Form Type</th>
-                            <th class="py-3 px-4">Submission Date</th>
-                            <th class="py-3 px-4">Status</th>
-                            <th class="py-3 px-4">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-orange-100">
-                        <?php while ($r = $records->fetch_assoc()): ?>
-                            <tr class="red-orange-table-row hover:shadow transition-all duration-200">
-                                <td class="py-3 px-4 font-medium"><?= htmlspecialchars($r['student_id']); ?></td>
-                                <td class="py-3 px-4"><?= htmlspecialchars($r['last_name'] . ', ' . $r['first_name']); ?></td>
-                                <td class="py-3 px-4">
-                                    <span class="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                                        <?= ucfirst(str_replace('_', ' ', $r['record_type'])); ?>
-                                    </span>
-                                </td>
-                                <td class="py-3 px-4"><?= date('M j, Y', strtotime($r['examination_date'])); ?></td>
-                                <td class="py-3 px-4">
-                                    <span class="px-2 py-1 rounded-full text-xs font-semibold
-                                        <?= $r['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
-                                            ($r['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 'red-orange-badge-pending'); ?>">
-                                        <?= strtoupper($r['verification_status']); ?>
-                                    </span>
-                                </td>
-                                <td class="py-3 px-4">
-                                    <?php
-                                    // Map database record_type to the correct form type name for the URL
-                                    $formType = match($r['record_type']) {
-                                        'history_form' => 'history_form',
-                                        'medical_exam' => 'medical_form',
-                                        'dental_exam'  => 'dental_form',
-                                        default => 'history_form'
-                                    };
-                                    ?>
-                                    <a href="verify_submission.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
-                                       class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
-                                       <i class="bi bi-eye"></i> Review & Verify
-                                    </a>
-                                </td>
+            <?php if ($records && $records->num_rows > 0): ?>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full border border-orange-200 text-sm rounded-lg overflow-hidden">
+                        <thead class="red-orange-table-header text-white">
+                            <tr>
+                                <th class="py-3 px-4">Student ID</th>
+                                <th class="py-3 px-4">Name</th>
+                                <th class="py-3 px-4">Form Type</th>
+                                <th class="py-3 px-4">Submission Date</th>
+                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4">Actions</th>
                             </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody class="divide-y divide-orange-100">
+                            <?php while ($r = $records->fetch_assoc()): ?>
+                                <tr class="red-orange-table-row hover:shadow transition-all duration-200">
+                                    <td class="py-3 px-4 font-medium"><?= htmlspecialchars($r['student_id']); ?></td>
+                                    <td class="py-3 px-4"><?= htmlspecialchars($r['last_name'] . ', ' . $r['first_name']); ?></td>
+                                    <td class="py-3 px-4">
+                                        <span class="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
+                                            <?= ucfirst(str_replace('_', ' ', $r['record_type'])); ?>
+                                        </span>
+                                    </td>
+                                    <td class="py-3 px-4"><?= date('M j, Y', strtotime($r['examination_date'])); ?></td>
+                                    <td class="py-3 px-4">
+                                        <span class="px-2 py-1 rounded-full text-xs font-semibold
+                                            <?= $r['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
+                                                ($r['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 'red-orange-badge-pending'); ?>">
+                                            <?= strtoupper($r['verification_status']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <?php
+                                        // Map database record_type to the correct form type name for the URL
+                                        $formType = match($r['record_type']) {
+                                            'history_form' => 'history_form',
+                                            'medical_exam' => 'medical_form',
+                                            'dental_exam'  => 'dental_form',
+                                            default => 'history_form'
+                                        };
+                                        ?>
+                                        <a href="verify_submission.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
+                                           class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
+                                           <i class="bi bi-eye"></i> Review & Verify
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
 
-        <?php else: ?>
-            <div class="text-center py-8">
-                <i class="bi bi-inbox text-4xl text-orange-400 mb-4"></i>
-                <p class="text-orange-600 text-lg">No submissions found for verification.</p>
-                <p class="text-orange-500 text-sm mt-2">
-                    <?php if ($type): ?>
-                        No <?= str_replace('_', ' ', $type) ?> submissions found.
-                    <?php else: ?>
-                        No submissions found for your assigned record types.
-                    <?php endif; ?>
-                </p>
-            </div>
+            <?php else: ?>
+                <div class="text-center py-8">
+                    <i class="bi bi-inbox text-4xl text-orange-400 mb-4"></i>
+                    <p class="text-orange-600 text-lg">No submissions found for verification.</p>
+                    <p class="text-orange-500 text-sm mt-2">
+                        <?php if ($type): ?>
+                            No <?= str_replace('_', ' ', $type) ?> submissions found.
+                        <?php else: ?>
+                            No submissions found for your assigned record types.
+                        <?php endif; ?>
+                    </p>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>

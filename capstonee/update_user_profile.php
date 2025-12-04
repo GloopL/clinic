@@ -459,5 +459,63 @@ if ($patient_data) {
             <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
         </div>
     </footer>
+
+    <script>
+// Add confirmation for logout
+document.addEventListener('DOMContentLoaded', function() {
+    const logoutLinks = document.querySelectorAll('a[href="logout.php"]');
+    
+    logoutLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Create custom confirmation modal
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
+                    <div class="p-6 text-center">
+                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="bi bi-question-circle text-red-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Confirm Logout</h3>
+                        <p class="text-gray-600 mb-6">Are you sure you want to log out of your account?</p>
+                        
+                        <div class="flex gap-3 justify-center">
+                            <button type="button" id="cancelLogout" 
+                                class="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors">
+                                Cancel
+                            </button>
+                            <button type="button" id="confirmLogout" 
+                                class="red-orange-gradient-button text-white px-5 py-2.5 rounded-lg font-medium hover:shadow-lg transition-all">
+                                Yes, Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Handle cancel button
+            document.getElementById('cancelLogout').addEventListener('click', function() {
+                document.body.removeChild(modal);
+            });
+            
+            // Handle confirm button
+            document.getElementById('confirmLogout').addEventListener('click', function() {
+                window.location.href = 'logout.php';
+            });
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            });
+        });
+    });
+});
+</script>
 </body>
 </html>
