@@ -46,8 +46,8 @@ $form_map = [
 
 // ✅ Define allowed record types for each role (what they can SEE in the list)
 $role_allowed_types = [
-    'nurse' => ['history_form', 'medical_exam', 'dental_exam'], // Nurse can see all
-    'doctor' => ['medical_exam'], // Doctor only sees medical exams
+    'nurse' => ['history_form', 'medical_exam'], // Nurse can see all
+    'doctor' => ['history_form', 'medical_exam'], // Doctor sees history forms and medical exams
     'dentist' => ['dental_exam'], // Dentist only sees dental exams
     'staff' => ['history_form', 'medical_exam', 'dental_exam'], // Staff can see all
     'admin' => ['history_form', 'medical_exam', 'dental_exam']  // Admin can see all
@@ -78,56 +78,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['rec
     }
 }
 
-// ✅ Fetch a single record (for detailed review)
-if ($type && $id) {
-    // ALLOW ALL ROLES TO VIEW ANY RECORD DETAILS (no restrictions on viewing)
-    if (isset($form_map[$type])) {
-        $table = $form_map[$type]['table'];
-        $query = "
-            SELECT f.*, mr.*, p.*
-            FROM $table f
-            JOIN medical_records mr ON f.record_id = mr.id
-            JOIN patients p ON mr.patient_id = p.id
-            WHERE f.record_id = ?
-        ";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $record = $stmt->get_result()->fetch_assoc();
+// ✅ Fetch all or filtered submissions based on user role (only for LIST view)
+$filter_sql = "WHERE mr.record_type IN ('" . implode("','", $allowed_types) . "')";
 
-        if (!$record) {
-            $error_message = "No record found for this submission.";
-        }
+if ($type && isset($form_map[$type])) {
+    // Check if the requested type is allowed for this user to SEE in list
+    if (in_array($form_map[$type]['record_type'], $allowed_types)) {
+        $db_type = $form_map[$type]['record_type'];
+        $filter_sql .= " AND mr.record_type = '$db_type'";
     } else {
-        $error_message = "Invalid form type.";
+        $error_message = "You are not authorized to view this type of record in the list.";
+        $filter_sql .= " AND 1=0"; // Force no results
     }
-} else {
-    // ✅ Fetch all or filtered submissions based on user role (only for LIST view)
-    $filter_sql = "WHERE mr.record_type IN ('" . implode("','", $allowed_types) . "')";
-    
-    if ($type && isset($form_map[$type])) {
-        // Check if the requested type is allowed for this user to SEE in list
-        if (in_array($form_map[$type]['record_type'], $allowed_types)) {
-            $db_type = $form_map[$type]['record_type'];
-            $filter_sql .= " AND mr.record_type = '$db_type'";
-        } else {
-            $error_message = "You are not authorized to view this type of record in the list.";
-            $filter_sql .= " AND 1=0"; // Force no results
-        }
-    }
-
-    // Add filter to show only verified forms
-    $filter_sql .= " AND mr.verification_status = 'verified'";
-
-    $records = $conn->query("
-        SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status,
-               p.first_name, p.last_name, p.student_id
-        FROM medical_records mr
-        JOIN patients p ON mr.patient_id = p.id
-        $filter_sql
-        ORDER BY mr.created_at DESC
-    ");
 }
+
+// Add filter to show only verified forms
+$filter_sql .= " AND mr.verification_status = 'verified'";
+
+$records = $conn->query("
+    SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status,
+           p.first_name, p.last_name, p.student_id
+    FROM medical_records mr
+    JOIN patients p ON mr.patient_id = p.id
+    $filter_sql
+    ORDER BY mr.created_at DESC
+");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -220,6 +195,11 @@ if ($type && $id) {
         .role-badge-staff {
             background: linear-gradient(135deg, #6b7280, #374151);
         }
+        
+        .btn-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-orange-50 to-red-50">
@@ -270,142 +250,8 @@ if ($type && $id) {
             </div>
         <?php endif; ?>
 
-        <!-- ✅ Single Record Review -->
-        <?php if ($record): ?>
-            <div class="red-orange-alert rounded-lg p-4 mb-6 border-l-4 border-orange-500">
-                <h3 class="font-semibold text-lg mb-3 text-orange-800">Patient Information</h3>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <!-- Basic Patient Info Only -->
-                    <p><strong>Student ID:</strong> <?= htmlspecialchars($record['student_id'] ?? '') ?></p>
-                    <p><strong>Name:</strong> <?= htmlspecialchars(($record['last_name'] ?? '') . ', ' . ($record['first_name'] ?? '') . ' ' . ($record['middle_name'] ?? '')) ?></p>
-                    <p><strong>Program:</strong> <?= htmlspecialchars($record['program'] ?? '') ?></p>
-                    <p><strong>Year Level:</strong> <?= htmlspecialchars($record['year_level'] ?? '') ?></p>
-                    <p><strong>Sex:</strong> <?= htmlspecialchars($record['sex'] ?? '') ?></p>
-                    <p><strong>Date of Birth:</strong> <?= htmlspecialchars($record['date_of_birth'] ?? '') ?></p>
-                </div>
-            </div>
-
-            <div class="bg-green-50 rounded-lg p-4 mb-6 border-l-4 border-green-500">
-                <h3 class="font-semibold text-lg mb-3 text-green-800">Form Summary</h3>
-                <div class="space-y-3">
-                    <?php
-                    // Define which fields to show based on form type
-                    $important_fields = [];
-                    
-                    switch($type) {
-                        case 'history_form':
-                        case 'history_exam':
-                            $important_fields = [
-                                'sports_intended' => 'Sports Intended',
-                                'previous_sports' => 'Previous Sports',
-                                'medical_history' => 'Medical History',
-                                'family_history' => 'Family History',
-                                'allergies' => 'Allergies',
-                                'current_medications' => 'Current Medications'
-                            ];
-                            break;
-                            
-                        case 'medical_form':
-                        case 'medical_exam':
-                            $important_fields = [
-                                'blood_pressure' => 'Blood Pressure',
-                                'heart_rate' => 'Heart Rate',
-                                'respiratory_rate' => 'Respiratory Rate',
-                                'temperature' => 'Temperature',
-                                'height' => 'Height',
-                                'weight' => 'Weight',
-                                'bmi' => 'BMI',
-                                'vision_left' => 'Vision Left',
-                                'vision_right' => 'Vision Right',
-                                'physical_findings' => 'Physical Findings'
-                            ];
-                            break;
-                            
-                        case 'dental_form':
-                        case 'dental_exam':
-                            $important_fields = [
-                                'oral_hygiene' => 'Oral Hygiene',
-                                'gingival_condition' => 'Gingival Condition',
-                                'occlusion' => 'Occlusion',
-                                'oral_prophylaxis' => 'Oral Prophylaxis',
-                                'restoration' => 'Restoration Needed',
-                                'extraction' => 'Extraction Needed',
-                                'prosthetic' => 'Prosthetic Needed',
-                                'orthodontic' => 'Orthodontic Treatment',
-                                'periodontal' => 'Periodontal Treatment'
-                            ];
-                            break;
-                    }
-                    
-                    // Display only important fields
-                    foreach($important_fields as $field => $label): 
-                        if (isset($record[$field]) && !empty($record[$field])): 
-                    ?>
-                        <div class="flex justify-between border-b pb-2">
-                            <span class="font-medium text-gray-700"><?= $label ?>:</span>
-                            <span class="text-gray-900"><?= htmlspecialchars($record[$field]) ?></span>
-                        </div>
-                    <?php 
-                        endif;
-                    endforeach; 
-                    ?>
-                    
-                    <!-- Examination Date -->
-                    <?php if (isset($record['examination_date']) && !empty($record['examination_date'])): ?>
-                        <div class="flex justify-between border-b pb-2">
-                            <span class="font-medium text-gray-700">Examination Date:</span>
-                            <span class="text-gray-900"><?= htmlspecialchars($record['examination_date']) ?></span>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <!-- Physician/Dentist Notes if available -->
-                    <?php if (isset($record['physician_notes']) && !empty($record['physician_notes'])): ?>
-                        <div class="mt-4">
-                            <span class="font-medium text-gray-700 block mb-2">Physician Notes:</span>
-                            <p class="text-gray-900 bg-white p-3 rounded border"><?= htmlspecialchars($record['physician_notes']) ?></p>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <?php if (isset($record['dentist_notes']) && !empty($record['dentist_notes'])): ?>
-                        <div class="mt-4">
-                            <span class="font-medium text-gray-700 block mb-2">Dentist Notes:</span>
-                            <p class="text-gray-900 bg-white p-3 rounded border"><?= htmlspecialchars($record['dentist_notes']) ?></p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                
-                <!-- Current Status -->
-                <div class="mt-4 pt-4 border-t">
-                    <p class="font-medium text-gray-700">Current Status:</p>
-                    <span class="px-3 py-1 rounded-full text-sm font-semibold mt-2 inline-block
-                        <?= $record['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
-                            ($record['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 'red-orange-badge-pending'); ?>">
-                        <?= strtoupper($record['verification_status']); ?>
-                    </span>
-                </div>
-            </div>
-
-            <!-- ✅ Action Buttons - ALL ROLES CAN VERIFY ANY FORM -->
-            <form method="POST" class="flex justify-center gap-4">
-                <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-                <input type="hidden" name="record_type" value="<?= $type; ?>">
-
-                <button type="submit" name="action" value="verified"
-                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
-                    <i class="bi bi-check-circle"></i> Verify Submission
-                </button>
-                <button type="submit" name="action" value="rejected"
-                        class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
-                    <i class="bi bi-x-circle"></i> Reject Submission
-                </button>
-                <a href="submissions.php?type=<?= $type ?>"
-                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
-                   <i class="bi bi-arrow-left"></i> Back to List
-                </a>
-            </form>
-
         <!-- ✅ All Submissions List -->
-        <?php elseif ($records && $records->num_rows > 0): ?>
+        <?php if ($records && $records->num_rows > 0): ?>
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-semibold text-orange-800">
                     <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' Submissions' : 'All Submissions'; ?>
@@ -469,9 +315,9 @@ if ($type && $id) {
                                         default => 'history_form'
                                     };
                                     ?>
-                                    <a href="submissions.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
+                                    <a href="../../modules/records/view_record.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
                                        class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
-                                       <i class="bi bi-eye"></i> Review & Verify
+                                       <i class="bi bi-eye"></i> Consult
                                     </a>
                                 </td>
                             </tr>

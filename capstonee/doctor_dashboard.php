@@ -33,8 +33,8 @@ $total_patients = $conn->query("SELECT COUNT(*) as count FROM patients")->fetch_
 $total_submissions = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'medical_exam'")->fetch_assoc()['count'];
 $total_medical_exams = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'medical_exam'")->fetch_assoc()['count'];
 
-// Get pending verifications count for doctor (medical exams only)
-$pending_verifications = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'pending' AND record_type = 'medical_exam'")->fetch_assoc()['count'];
+// Get pending verifications count for doctor (medical exams AND history forms)
+$pending_verifications = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'pending' AND (record_type = 'medical_exam' OR record_type = 'history_form')")->fetch_assoc()['count'];
 
 // Get recent patients (only those with medical exam records)
 $recent_patients_query = "

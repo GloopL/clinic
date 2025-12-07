@@ -26,7 +26,7 @@ $display_name = !empty($user['full_name']) ? trim($user['full_name']) : $user['u
 
 // Get counts for dashboard
 $total_patients = $conn->query("SELECT COUNT(*) as count FROM patients")->fetch_assoc()['count'];
-$total_records = $conn->query("SELECT COUNT(*) as count FROM medical_records")->fetch_assoc()['count'];
+$total_records = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'verified' AND (record_type = 'medical_exam' OR record_type = 'history_form')")->fetch_assoc()['count'];
 $total_history_forms = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'history_form'")->fetch_assoc()['count'];
 $total_dental_exams = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'dental_exam'")->fetch_assoc()['count'];
 $total_medical_exams = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'medical_exam'")->fetch_assoc()['count'];

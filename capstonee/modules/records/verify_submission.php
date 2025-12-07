@@ -47,7 +47,7 @@ $form_map = [
 // ✅ Define allowed record types for each role (what they can SEE in the list)
 $role_allowed_types = [
     'nurse' => ['history_form', 'medical_exam', 'dental_exam'], // Nurse can see all
-    'doctor' => ['medical_exam'], // Doctor only sees medical exams
+    'doctor' => ['history_form', 'medical_exam'], // Doctor sees history forms and medical exams
     'dentist' => ['dental_exam'], // Dentist only sees dental exams
     'staff' => ['history_form', 'medical_exam', 'dental_exam'], // Staff can see all
     'admin' => ['history_form', 'medical_exam', 'dental_exam']  // Admin can see all
@@ -269,6 +269,22 @@ if ($type && $id) {
 
         <!-- ✅ Single Record Review -->
         <?php if ($record): ?>
+            <!-- Form Type Header -->
+            <div class="mb-4">
+                <h3 class="text-2xl font-bold text-orange-700">
+                    <?php 
+                    $formTypeDisplay = match($type) {
+                        'history_form' => 'History Form',
+                        'medical_form' => 'Medical Exam',
+                        'dental_form' => 'Dental Exam',
+                        default => ucfirst(str_replace('_', ' ', $type))
+                    };
+                    echo $formTypeDisplay . ' Review';
+                    ?>
+                </h3>
+                <p class="text-gray-600">Submission ID: <?= htmlspecialchars($record['record_id']); ?></p>
+            </div>
+            
             <div class="red-orange-alert rounded-lg p-4 mb-6 border-l-4 border-orange-500">
                 <h3 class="font-semibold text-lg mb-3 text-orange-800">Patient Information</h3>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -387,14 +403,31 @@ if ($type && $id) {
                 <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
                 <input type="hidden" name="record_type" value="<?= $type; ?>">
 
-                <button type="submit" name="action" value="verified"
-                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
-                    <i class="bi bi-check-circle"></i> Verify Submission
-                </button>
+                <?php if ($record['verification_status'] !== 'verified'): ?>
+                    <button type="submit" name="action" value="verified"
+                            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
+                        <i class="bi bi-check-circle"></i> Verify Submission
+                    </button>
+                <?php else: ?>
+                    <button type="button" disabled
+                            class="bg-green-300 text-white px-6 py-2 rounded-lg shadow font-semibold flex items-center gap-2 cursor-not-allowed">
+                        <i class="bi bi-check-circle"></i> Already Verified
+                    </button>
+                <?php endif; ?>
+                
                 <button type="submit" name="action" value="rejected"
                         class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
                     <i class="bi bi-x-circle"></i> Reject Submission
                 </button>
+                
+                <!-- Add Consult button - only show when verified AND (not dental exam OR user is dentist) -->
+                <?php if ($record['verification_status'] === 'verified' && ($type !== 'dental_form' || $user_role === 'dentist')): ?>
+                <a href="view_record.php?type=<?= $type ?>&id=<?= $record['record_id']; ?>"
+                   class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
+                   <i class="bi bi-eye"></i> Consult
+                </a>
+                <?php endif; ?>
+                
                 <a href="verify_submission.php?type=<?= $type ?>"
                    class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
                    <i class="bi bi-arrow-left"></i> Back to List
@@ -402,7 +435,6 @@ if ($type && $id) {
             </form>
 
         <!-- ✅ All Submissions List -->
-                <!-- ✅ All Submissions List -->
         <?php else: ?>
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-semibold text-orange-800">

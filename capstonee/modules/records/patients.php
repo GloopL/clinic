@@ -67,10 +67,10 @@ $query = "SELECT DISTINCT p.* FROM patients p WHERE 1=1";
 
 // Add role-based filtering
 if ($user_role === 'doctor') {
-    // Doctor: Only show patients with medical exams
+    // Doctor: Show patients with medical exams OR history forms
     $query .= " AND EXISTS (SELECT 1 FROM medical_records mr 
-               JOIN medical_exams me ON mr.id = me.record_id 
-               WHERE mr.patient_id = p.id AND mr.record_type = 'medical_exam')";
+               WHERE mr.patient_id = p.id 
+               AND (mr.record_type = 'medical_exam' OR mr.record_type = 'history_form'))";
 } elseif ($user_role === 'dentist') {
     // Dentist: Only show patients with dental exams
     $query .= " AND EXISTS (SELECT 1 FROM medical_records mr 
@@ -219,15 +219,18 @@ while ($row = $result->fetch_assoc()) {
     </header>
 
     <div class="max-w-7xl mx-auto px-4 py-8 pt-20">
+        <!-- ✅ SWAPPED: Back button on left, Role badge on right -->
         <div class="mb-6 flex justify-between items-center">
+            <div>
+                <a href="<?php echo $dashboard_url; ?>" class="inline-flex items-center gap-2 red-orange-gradient-button text-white font-semibold px-4 py-2 rounded-lg shadow hover:shadow-lg transition-all">
+                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
             <div>
                 <span class="px-3 py-1 rounded-full text-sm font-semibold mt-1 inline-block role-badge role-badge-<?= $user_role ?>">
                     <i class="bi bi-person-check"></i> <?= ucfirst($user_role) ?> Mode
                 </span>
             </div>
-            <a href="<?php echo $dashboard_url; ?>" class="inline-flex items-center gap-2 red-orange-gradient-button text-white font-semibold px-4 py-2 rounded-lg shadow hover:shadow-lg transition-all">
-                <i class="bi bi-arrow-left"></i> Back to Dashboard
-            </a>
         </div>
         
         <div class="bg-white shadow-lg rounded-lg overflow-hidden">
@@ -239,7 +242,7 @@ while ($row = $result->fetch_assoc()) {
                         <p class="text-orange-100 text-sm mt-1">
                             <?php 
                             if ($user_role === 'doctor') {
-                                echo "Showing patients with medical examinations only";
+                                echo "Showing patients with medical examinations and history forms";
                             } elseif ($user_role === 'dentist') {
                                 echo "Showing patients with dental examinations only";
                             } else {
@@ -359,7 +362,7 @@ while ($row = $result->fetch_assoc()) {
                                     <td colspan="7" class="px-6 py-8 text-center text-orange-600">
                                         <i class="bi bi-people text-4xl mb-3 block"></i>
                                         <?php if ($user_role === 'doctor'): ?>
-                                            No patients with medical examinations found.
+                                            No patients with medical examinations or history forms found.
                                         <?php elseif ($user_role === 'dentist'): ?>
                                             No patients with dental examinations found.
                                         <?php else: ?>

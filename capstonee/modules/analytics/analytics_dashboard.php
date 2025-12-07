@@ -507,9 +507,9 @@ $readable_record_types = array_map(function($type) {
         <a href="<?= $dashboard_url ?>" class="hover:text-yellow-200 flex items-center gap-2 transition-all">
           <i class="bi bi-speedometer2"></i> Main Dashboard
         </a>
-        <a href="../../logout.php" class="bg-white text-red-800 px-4 py-2 rounded-lg font-semibold hover:bg-orange-50 flex items-center gap-2 transition-all">
-          <i class="bi bi-box-arrow-right"></i> Logout
-        </a>
+        <a href="#" onclick="openLogoutModal(event)" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
       </nav>
     </div>
   </header>
@@ -1033,6 +1033,26 @@ $readable_record_types = array_map(function($type) {
       }
     });
   });
+
+    
+  // Logout modal functions
+  function openLogoutModal(event) {
+    event.preventDefault();
+    document.getElementById('logoutModal').classList.remove('hidden');
+  }
+
+  function closeLogoutModal() {
+    document.getElementById('logoutModal').classList.add('hidden');
+  }
+
+  // Close logout modal when clicking outside
+  document.getElementById('logoutModal').addEventListener('click', function(e) {
+    if (e.target.id === 'logoutModal') {
+      closeLogoutModal();
+    }
+  });
+  
   </script>
+
 </body>
 </html>
