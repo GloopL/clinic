@@ -92,8 +92,9 @@ if ($type && isset($form_map[$type])) {
     }
 }
 
-// Add filter to show only verified forms
-$filter_sql .= " AND mr.verification_status = 'verified'";
+
+// Add filter to show only forms marked for certification
+$filter_sql .= " AND mr.verification_status = 'for_certification'";
 
 $records = $conn->query("
     SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status,
@@ -232,7 +233,7 @@ $records = $conn->query("
                <i class="bi bi-arrow-left-circle"></i> Back to Dashboard
             </a>
             <div class="text-right">
-                <h2 class="text-2xl font-bold text-orange-700">Consult</h2>
+                <h2 class="text-2xl font-bold text-orange-700">For Certification</h2>
                 <span class="px-3 py-1 rounded-full text-sm font-semibold mt-1 inline-block role-badge role-badge-<?= $user_role ?>">
                     <i class="bi bi-person-check"></i> <?= ucfirst($user_role) ?> Mode
                 </span>
@@ -254,7 +255,7 @@ $records = $conn->query("
 <!-- Move the filter buttons BEFORE the conditional check -->
 <div class="flex justify-between items-center mb-4">
     <h3 class="text-xl font-semibold text-orange-800">
-        <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' Submissions' : 'All Submissions'; ?>
+        <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' for Certification' : 'All for Certification'; ?>
         <span class="text-sm font-normal text-gray-600 ml-2">
             <?php if ($records && $records->num_rows > 0): ?>
                 (<?= $records->num_rows ?> record<?= $records->num_rows !== 1 ? 's' : '' ?>)
@@ -265,16 +266,16 @@ $records = $conn->query("
     </h3>
     <div class="flex gap-2">
         <?php if (in_array('history_form', $allowed_types)): ?>
-            <a href="submissions.php?type=history_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">History Forms</a>
+            <a href="for_certification.php?type=history_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">History Forms</a>
         <?php endif; ?>
         <?php if (in_array('medical_exam', $allowed_types)): ?>
-            <a href="submissions.php?type=medical_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Medical Exams</a>
+            <a href="for_certification.php?type=medical_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Medical Exams</a>
         <?php endif; ?>
         <?php if (in_array('dental_exam', $allowed_types)): ?>
-            <a href="submissions.php?type=dental_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Dental Exams</a>
+            <a href="for_certification.php?type=dental_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Dental Exams</a>
         <?php endif; ?>
         <?php if (count($allowed_types) > 1): ?>
-            <a href="submissions.php" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">All Submissions</a>
+            <a href="for_certification.php" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">All Forms</a>
         <?php endif; ?>
     </div>
 </div>
@@ -305,10 +306,8 @@ $records = $conn->query("
                         </td>
                         <td class="py-3 px-4"><?= date('M j, Y', strtotime($r['examination_date'])); ?></td>
                         <td class="py-3 px-4">
-                            <span class="px-2 py-1 rounded-full text-xs font-semibold
-                                <?= $r['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
-                                    ($r['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 'red-orange-badge-pending'); ?>">
-                                <?= strtoupper($r['verification_status']); ?>
+                            <span class="px-2 py-1 rounded-full text-xs font-semibold red-orange-badge-pending">
+                                FOR CERTIFICATION
                             </span>
                         </td>
                         <td class="py-3 px-4">
@@ -323,7 +322,7 @@ $records = $conn->query("
                             ?>
                             <a href="../../modules/records/view_record.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
                                class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
-                               <i class="bi bi-eye"></i> Consult
+                               <i class="bi bi-award"></i> Certify
                             </a>
                         </td>
                     </tr>
@@ -336,12 +335,12 @@ $records = $conn->query("
     <!-- Empty state message -->
     <div class="text-center py-8">
         <i class="bi bi-inbox text-4xl text-orange-400 mb-4"></i>
-        <p class="text-orange-600 text-lg">No submissions found for verification.</p>
+        <p class="text-orange-600 text-lg">No submissions found for certification.</p>
         <p class="text-orange-500 text-sm mt-2">
             <?php if ($type): ?>
-                No <?= str_replace('_', ' ', $type) ?> submissions found.
+                No <?= str_replace('_', ' ', $type) ?> submissions marked for certification.
             <?php else: ?>
-                No submissions found for your assigned record types.
+                No submissions marked for certification.
             <?php endif; ?>
         </p>
     </div>

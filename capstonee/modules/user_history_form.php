@@ -26,7 +26,6 @@ if (!isset($_SESSION['user_id'])) {
 $success_message = '';
 $error_message = '';
 $has_existing_form = false;
-$existing_form_id = null;
 $patient_data = null;
 
 // Fetch logged-in user's patient data from registration
@@ -58,14 +57,13 @@ if (isset($_SESSION['username'])) {
                                                   (!empty($patient_data['middle_initial_cap']) ? ' ' . $patient_data['middle_initial_cap'] : '') . 
                                                   ' ' . $patient_data['last_name_cap'];
             
-            // Check for existing history form - ONLY pending or verified, NOT rejected
+            // Check for existing history form - for informational purposes only
             $check_stmt = $conn->prepare("
-                SELECT mr.id 
+                SELECT COUNT(*) as form_count 
                 FROM medical_records mr 
                 INNER JOIN history_forms hf ON mr.id = hf.record_id
                 WHERE mr.patient_id = ? 
-                AND mr.record_type = 'history_form' 
-                AND hf.verification_status IN ('pending', 'verified')
+                AND mr.record_type = 'history_form'
             ");
             if ($check_stmt) {
                 $check_stmt->bind_param("i", $patient_data['id']);
@@ -73,9 +71,8 @@ if (isset($_SESSION['username'])) {
                 $check_result = $check_stmt->get_result();
                 
                 if ($check_result->num_rows > 0) {
-                    $has_existing_form = true;
-                    $existing_form = $check_result->fetch_assoc();
-                    $existing_form_id = $existing_form['id'];
+                    $count_row = $check_result->fetch_assoc();
+                    $has_existing_form = ($count_row['form_count'] > 0);
                 }
                 $check_stmt->close();
             }
@@ -84,7 +81,7 @@ if (isset($_SESSION['username'])) {
     }
 }
 
-// Process form submission
+// Process form submission - ALWAYS CREATE NEW FORM
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Get patient ID from hidden field
     $patient_id = isset($_POST['patient_id']) ? intval($_POST['patient_id']) : 0;
@@ -99,100 +96,66 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (empty($sports_event)) {
             $error_message = "Please enter the sports event.";
         } else {
-            // Check if user confirmed to replace existing form
-            $should_replace = false;
-            
-            // Check if this is a replacement request
-            $replace_requested = isset($_POST['replace_existing']) && $_POST['replace_existing'] == '1';
-            
-            if ($has_existing_form) {
-                if (!$replace_requested) {
-                    // Show error asking for confirmation
-                    $error_message = "You already have a submitted history form. Please check the 'I understand this will replace my existing form' box and try again.";
+            // ALWAYS INSERT NEW RECORD - never update or replace
+            $stmt = $conn->prepare("INSERT INTO medical_records (patient_id, record_type, examination_date) VALUES (?, 'history_form', ?)");
+            if ($stmt) {
+                $stmt->bind_param("is", $patient_id, $date_of_examination);
+                
+                if ($stmt->execute()) {
+                    $record_id = $conn->insert_id;
+                    
+                    // Insert history form data
+                    $stmt2 = $conn->prepare("INSERT INTO history_forms (record_id, sports_event) VALUES (?, ?)");
+                    if ($stmt2) {
+                        $stmt2->bind_param("is", $record_id, $sports_event);
+                        $stmt2->execute();
+                        $stmt2->close();
+                    }
+                    
+                    // Generate QR code for this specific record
+                    $qr_data = "record_id=" . $record_id . "&type=history_form&date=" . $date_of_examination;
+                    $qr_code = base64_encode($qr_data);
+
+                    // Update patient QR code (store latest QR)
+                    $stmt3 = $conn->prepare("UPDATE patients SET qr_code = ? WHERE id = ?");
+                    if ($stmt3) {
+                        $stmt3->bind_param("si", $qr_code, $patient_id);
+                        $stmt3->execute();
+                        $stmt3->close();
+                    }
+
+                    // Add to analytics data
+                    $stmt4 = $conn->prepare("INSERT INTO analytics_data (data_type, data_value, data_label, data_date) VALUES ('history_form', 1, 'New History Form', CURDATE())");
+                    if ($stmt4) {
+                        $stmt4->execute();
+                        $stmt4->close();
+                    }
+
+                    // Show success message
+                    $success_message = "New history form successfully submitted! Your previous submissions are still available.";
+                    
+                    // Add activity log
+                    $activity_type = 'medical_history';
+                    $description = 'Medical History Form Submitted';
+                    
+                    $activity_stmt = $conn->prepare("INSERT INTO user_activities (user_id, activity_type, activity_description) VALUES (?, ?, ?)");
+                    if ($activity_stmt) {
+                        $activity_stmt->bind_param("iss", $_SESSION['user_id'], $activity_type, $description);
+                        $activity_stmt->execute();
+                        $activity_stmt->close();
+                    }
+                    
+                    // Clear POST data to prevent resubmission
+                    $_POST = array();
+                    
+                    // Update the existing form status
+                    $has_existing_form = true;
                 } else {
-                    $should_replace = true;
-                    // Instead of deleting, just update the existing medical record date
-                    if ($existing_form_id) {
-                        $update_stmt = $conn->prepare("UPDATE medical_records SET examination_date = ? WHERE id = ?");
-                        if ($update_stmt) {
-                            $update_stmt->bind_param("si", $date_of_examination, $existing_form_id);
-                            $update_stmt->execute();
-                            $update_stmt->close();
-                            
-                            // Now create a new entry in history_forms linked to the existing medical record
-                            $stmt2 = $conn->prepare("INSERT INTO history_forms (record_id) VALUES (?)");
-                            if ($stmt2) {
-                                $stmt2->bind_param("i", $existing_form_id);
-                                $stmt2->execute();
-                                $stmt2->close();
-                            }
-                        }
-                    }
+                    $error_message = "Error submitting form: " . $stmt->error;
                 }
-            }
-            
-            if (empty($error_message)) {
-                if (!$has_existing_form || !$should_replace) {
-                    // Create NEW medical record entry (first time submission or no replacement)
-                    $stmt = $conn->prepare("INSERT INTO medical_records (patient_id, record_type, examination_date) VALUES (?, 'history_form', ?)");
-                    if ($stmt) {
-                        $stmt->bind_param("is", $patient_id, $date_of_examination);
-                        
-                        if ($stmt->execute()) {
-                            $record_id = $conn->insert_id;
-                            
-                            // Simple insert - just the record_id (all other fields have defaults)
-                            $stmt2 = $conn->prepare("INSERT INTO history_forms (record_id) VALUES (?)");
-                            if ($stmt2) {
-                                $stmt2->bind_param("i", $record_id);
-                                $stmt2->execute();
-                                $stmt2->close();
-                            }
-                        }
-                        $stmt->close();
-                    }
-                }
-                
-                // Generate QR code (use existing record_id if replacing, new if not)
-                $qr_record_id = $should_replace ? $existing_form_id : $record_id;
-                $qr_data = "record_id=" . $qr_record_id . "&type=history_form&date=" . $date_of_examination;
-                $qr_code = base64_encode($qr_data);
-
-                // Update patient with QR code
-                $stmt3 = $conn->prepare("UPDATE patients SET qr_code = ? WHERE id = ?");
-                if ($stmt3) {
-                    $stmt3->bind_param("si", $qr_code, $patient_id);
-                    $stmt3->execute();
-                    $stmt3->close();
-                }
-
-                // Add to analytics data
-                $stmt4 = $conn->prepare("INSERT INTO analytics_data (data_type, data_value, data_label, data_date) VALUES ('history_form', 1, 'New History Form', CURDATE())");
-                if ($stmt4) {
-                    $stmt4->execute();
-                    $stmt4->close();
-                }
-
-                // Show success message on same page
-                $success_message = $should_replace ? 
-                    "Form successfully updated! Please wait for admin verification." : 
-                    "Form successfully submitted! Please wait for admin verification.";
-                
-                $activity_type = 'medical_history';
-                $description = $should_replace ? 'Medical History Form Updated' : 'Medical History Form Submitted';
-                
-                $activity_stmt = $conn->prepare("INSERT INTO user_activities (user_id, activity_type, activity_description) VALUES (?, ?, ?)");
-                if ($activity_stmt) {
-                    $activity_stmt->bind_param("iss", $_SESSION['user_id'], $activity_type, $description);
-                    $activity_stmt->execute();
-                    $activity_stmt->close();
-                }
-                
-                // Clear POST data to prevent resubmission
-                $_POST = array();
-                
-                // Update the existing form status
-                $has_existing_form = true;
+                $stmt->close();
+            } else {
+                $error_message = "Database error: Unable to prepare statement.";
             }
         }
     }
@@ -236,17 +199,11 @@ $control_number = "LIPA 25-" . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(
                     <?php if ($has_existing_form && empty($error_message) && empty($success_message)): ?>
                         <div class="existing-form-alert p-4 rounded-lg mb-6">
                             <div class="flex items-center">
-                                <i class="bi bi-exclamation-triangle-fill text-xl mr-3"></i>
+                                <i class="bi bi-info-circle-fill text-xl mr-3"></i>
                                 <div>
-                                    <h5 class="font-bold">Existing Form Found</h5>
-                                    <p class="text-sm">You have already submitted a history form. Submitting a new one will replace your previous submission.</p>
+                                    <h5 class="font-bold">Previous Submission(s) Found</h5>
+                                    <p class="text-sm">You have previously submitted history form(s). Submitting a new form will create an additional submission - your previous forms will be kept in your records.</p>
                                 </div>
-                            </div>
-                            <div class="mt-3">
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="confirm_replace" class="mr-2">
-                                    <span>I understand this will replace my existing form</span>
-                                </label>
                             </div>
                         </div>
                     <?php endif; ?>
@@ -264,8 +221,6 @@ $control_number = "LIPA 25-" . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(
                     <?php endif; ?>
                     
                     <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" id="historyForm" onsubmit="return validateForm()">
-                        <input type="hidden" name="replace_existing" id="replace_existing" value="0">
-                        
                         <!-- Hidden fields for database -->
                         <input type="hidden" id="patient_id" name="patient_id" value="<?php echo isset($patient_data['id']) ? htmlspecialchars($patient_data['id']) : ''; ?>">
                         <input type="hidden" id="first_name" name="first_name" value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>">
@@ -383,7 +338,7 @@ $control_number = "LIPA 25-" . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(
                                         <?php else: ?>
                                             <i class="bi bi-pencil-square mr-1"></i> Please select your sex
                                         <?php endif; ?>
-                                    </p>
+                                </p>
                                 </div>
                                 
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
@@ -453,14 +408,14 @@ $control_number = "LIPA 25-" . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(
                             </p>
                             <p class="text-blue-600">
                                 <i class="bi bi-shield-check text-blue-500 mr-1"></i> 
-                                Please verify all information before submitting.
+                                You can submit multiple history forms for different sports events.
                             </p>
                         </div>
                         
                         <div class="flex flex-col md:flex-row gap-4 justify-end mt-8">
                             <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg shadow hover:bg-blue-700 transition flex items-center justify-center gap-2">
                                 <i class="bi bi-check-circle"></i> 
-                                <?php echo $has_existing_form ? 'Replace Existing Form' : 'Submit History Form'; ?>
+                                Submit New Form
                             </button>
                         </div>
                     </form>
@@ -491,20 +446,11 @@ $control_number = "LIPA 25-" . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(
                 return false;
             }
             
-            // If there's an existing form, check if user confirmed replacement
+            // Simple confirmation for new submission
             <?php if ($has_existing_form): ?>
-                var confirmCheckbox = document.getElementById('confirm_replace');
-                if (confirmCheckbox && !confirmCheckbox.checked) {
-                    alert('Please check the confirmation box to replace your existing form.');
+                if (!confirm('You have previous submission(s). This will create a NEW history form (your previous forms will be kept). Continue?')) {
                     return false;
                 }
-                
-                if (!confirm('Are you sure you want to replace your existing history form? This action cannot be undone.')) {
-                    return false;
-                }
-                
-                // Set replace flag
-                document.getElementById('replace_existing').value = '1';
             <?php endif; ?>
             
             return true;

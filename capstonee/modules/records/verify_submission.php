@@ -2,11 +2,13 @@
 session_start();
 include '../../config/database.php';
 
+
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../../login.php");
     exit();
 }
+
 
 // Determine dashboard URL based on role
 $dashboard_url = '../../dashboard.php';
@@ -22,6 +24,7 @@ if (isset($_SESSION['role'])) {
     }
 }
 
+
 $success_message = '';
 $error_message = '';
 $type = $_GET['type'] ?? '';
@@ -29,20 +32,25 @@ $id = $_GET['id'] ?? '';
 $record = null;
 $records = null;
 
+
 // Get current user role
 $user_role = $_SESSION['role'] ?? 'user';
+
 
 // ✅ Map both "form" and "exam" types to real table names
 $form_map = [
     'history_form' => ['table' => 'history_forms', 'record_type' => 'history_form'],
     'history_exam' => ['table' => 'history_forms', 'record_type' => 'history_form'],
 
+
     'medical_form' => ['table' => 'medical_exams', 'record_type' => 'medical_exam'],
     'medical_exam' => ['table' => 'medical_exams', 'record_type' => 'medical_exam'],
+
 
     'dental_form'  => ['table' => 'dental_exams', 'record_type' => 'dental_exam'],
     'dental_exam'  => ['table' => 'dental_exams', 'record_type' => 'dental_exam']
 ];
+
 
 // ✅ Define allowed record types for each role (what they can SEE in the list)
 $role_allowed_types = [
@@ -53,8 +61,10 @@ $role_allowed_types = [
     'admin' => ['history_form', 'medical_exam', 'dental_exam']  // Admin can see all
 ];
 
+
 // Get allowed types for current user (for viewing in list)
 $allowed_types = $role_allowed_types[$user_role] ?? [];
+
 
 // ✅ Handle Verify / Reject
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['record_id'], $_POST['record_type'])) {
@@ -62,14 +72,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['rec
     $record_type = $_POST['record_type'];
     $action = $_POST['action'];
 
+
     // ALLOW ALL ROLES TO VERIFY ANY FORM TYPE (no restrictions on verification)
     if (in_array($action, ['verified', 'rejected'])) {
         if (isset($form_map[$record_type])) {
             $table = $form_map[$record_type]['table'];
 
+
             // Update both main and specific form table
             $conn->query("UPDATE medical_records SET verification_status='$action' WHERE id='$record_id'");
             $conn->query("UPDATE $table SET verification_status='$action' WHERE record_id='$record_id'");
+
 
             $success_message = "Record #$record_id has been marked as " . strtoupper($action) . ".";
         } else {
@@ -77,6 +90,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['rec
         }
     }
 }
+
 
 // ✅ Fetch a single record (for detailed review)
 if ($type && $id) {
@@ -95,6 +109,7 @@ if ($type && $id) {
         $stmt->execute();
         $record = $stmt->get_result()->fetch_assoc();
 
+
         if (!$record) {
             $error_message = "No record found for this submission.";
         }
@@ -103,8 +118,10 @@ if ($type && $id) {
     }
 } else {
     // ✅ Fetch all or filtered submissions based on user role (only for LIST view)
-    $filter_sql = "WHERE mr.record_type IN ('" . implode("','", $allowed_types) . "')";
-    
+    // ✅ ONLY SHOW PENDING SUBMISSIONS
+    $filter_sql = "WHERE mr.record_type IN ('" . implode("','", $allowed_types) . "') 
+                    AND mr.verification_status = 'pending'";
+   
     if ($type && isset($form_map[$type])) {
         // Check if the requested type is allowed for this user to SEE in list
         if (in_array($form_map[$type]['record_type'], $allowed_types)) {
@@ -116,12 +133,13 @@ if ($type && $id) {
         }
     }
 
+
     $records = $conn->query("
         SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status,
                p.first_name, p.last_name, p.student_id
         FROM medical_records mr
         JOIN patients p ON mr.patient_id = p.id
-        $filter_sql AND mr.verification_status NOT IN ('verified', 'rejected')
+        $filter_sql
         ORDER BY mr.created_at DESC
     ");
 }
@@ -139,87 +157,88 @@ if ($type && $id) {
         .red-orange-gradient {
             background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
         }
-        
+       
         .red-orange-gradient-light {
             background: linear-gradient(135deg, #fef2f2, #ffedd5, #fed7aa);
         }
-        
+       
         .red-orange-gradient-button {
             background: linear-gradient(135deg, #dc2626, #ea580c);
         }
-        
+       
         .red-orange-gradient-button:hover {
             background: linear-gradient(135deg, #b91c1c, #c2410c);
         }
-        
+       
         .red-orange-alert {
             background: linear-gradient(135deg, #fef2f2, #ffedd5);
             border-left-color: #ea580c;
         }
-        
+       
         .red-orange-table-header {
             background: linear-gradient(135deg, #dc2626, #ea580c);
         }
-        
+       
         .red-orange-table-row {
             background: linear-gradient(135deg, #fef2f2, #ffedd5);
         }
-        
+       
         .red-orange-table-row:hover {
             background: linear-gradient(135deg, #fee2e2, #fed7aa);
         }
-        
+       
         .red-orange-badge {
             background: linear-gradient(135deg, #fecaca, #fed7aa);
             color: #7c2d12;
         }
-        
+       
         .red-orange-badge-verified {
             background: linear-gradient(135deg, #dcfce7, #bbf7d0);
             color: #166534;
         }
-        
+       
         .red-orange-badge-pending {
             background: linear-gradient(135deg, #fef3c7, #fde68a);
             color: #92400e;
         }
-        
+       
         .red-orange-badge-rejected {
             background: linear-gradient(135deg, #fee2e2, #fecaca);
             color: #991b1b;
         }
-        
+       
         .filter-button {
             background: linear-gradient(135deg, #ea580c, #f97316);
         }
-        
+       
         .filter-button:hover {
             background: linear-gradient(135deg, #c2410c, #ea580c);
         }
-        
+       
         .role-badge {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: white;
         }
-        
+       
         .role-badge-nurse {
             background: linear-gradient(135deg, #ec4899, #be185d);
         }
-        
+       
         .role-badge-doctor {
             background: linear-gradient(135deg, #10b981, #047857);
         }
-        
+       
         .role-badge-dentist {
             background: linear-gradient(135deg, #f59e0b, #d97706);
         }
-        
+       
         .role-badge-staff {
             background: linear-gradient(135deg, #6b7280, #374151);
         }
     </style>
 </head>
 <body class="bg-gradient-to-br from-orange-50 to-red-50">
+
 
     <!-- HEADER (same style as QR Scan / patient pages) -->
     <header class="red-orange-gradient text-white shadow-md sticky top-0 z-50">
@@ -239,9 +258,10 @@ if ($type && $id) {
         </div>
     </header>
 
+
 <div class="min-h-screen py-10 px-6 pt-20">
     <div class="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-8">
-        
+       
         <!-- Header -->
         <div class="flex justify-between items-center mb-6">
             <a href="<?php echo $dashboard_url; ?>"
@@ -249,12 +269,13 @@ if ($type && $id) {
                <i class="bi bi-arrow-left-circle"></i> Back to Dashboard
             </a>
             <div class="text-right">
-                <h2 class="text-2xl font-bold text-orange-700">Verify Submissions</h2>
+                <h2 class="text-2xl font-bold text-orange-700">Verify Pending Submissions</h2>
                 <span class="px-3 py-1 rounded-full text-sm font-semibold mt-1 inline-block role-badge role-badge-<?= $user_role ?>">
                     <i class="bi bi-person-check"></i> <?= ucfirst($user_role) ?> Mode
                 </span>
             </div>
         </div>
+
 
         <!-- Notifications -->
         <?php if ($success_message): ?>
@@ -267,12 +288,13 @@ if ($type && $id) {
             </div>
         <?php endif; ?>
 
+
         <!-- ✅ Single Record Review -->
         <?php if ($record): ?>
             <!-- Form Type Header -->
             <div class="mb-4">
                 <h3 class="text-2xl font-bold text-orange-700">
-                    <?php 
+                    <?php
                     $formTypeDisplay = match($type) {
                         'history_form' => 'History Form',
                         'medical_form' => 'Medical Exam',
@@ -284,7 +306,7 @@ if ($type && $id) {
                 </h3>
                 <p class="text-gray-600">Submission ID: <?= htmlspecialchars($record['record_id']); ?></p>
             </div>
-            
+           
             <div class="red-orange-alert rounded-lg p-4 mb-6 border-l-4 border-orange-500">
                 <h3 class="font-semibold text-lg mb-3 text-orange-800">Patient Information</h3>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -298,13 +320,14 @@ if ($type && $id) {
                 </div>
             </div>
 
+
             <div class="bg-green-50 rounded-lg p-4 mb-6 border-l-4 border-green-500">
                 <h3 class="font-semibold text-lg mb-3 text-green-800">Form Summary</h3>
                 <div class="space-y-3">
                     <?php
                     // Define which fields to show based on form type
                     $important_fields = [];
-                    
+                   
                     switch($type) {
                         case 'history_form':
                         case 'history_exam':
@@ -317,7 +340,7 @@ if ($type && $id) {
                                 'current_medications' => 'Current Medications'
                             ];
                             break;
-                            
+                           
                         case 'medical_form':
                         case 'medical_exam':
                             $important_fields = [
@@ -333,7 +356,7 @@ if ($type && $id) {
                                 'physical_findings' => 'Physical Findings'
                             ];
                             break;
-                            
+                           
                         case 'dental_form':
                         case 'dental_exam':
                             $important_fields = [
@@ -349,20 +372,20 @@ if ($type && $id) {
                             ];
                             break;
                     }
-                    
+                   
                     // Display only important fields
-                    foreach($important_fields as $field => $label): 
-                        if (isset($record[$field]) && !empty($record[$field])): 
+                    foreach($important_fields as $field => $label):
+                        if (isset($record[$field]) && !empty($record[$field])):
                     ?>
                         <div class="flex justify-between border-b pb-2">
                             <span class="font-medium text-gray-700"><?= $label ?>:</span>
                             <span class="text-gray-900"><?= htmlspecialchars($record[$field]) ?></span>
                         </div>
-                    <?php 
+                    <?php
                         endif;
-                    endforeach; 
+                    endforeach;
                     ?>
-                    
+                   
                     <!-- Examination Date -->
                     <?php if (isset($record['examination_date']) && !empty($record['examination_date'])): ?>
                         <div class="flex justify-between border-b pb-2">
@@ -370,7 +393,7 @@ if ($type && $id) {
                             <span class="text-gray-900"><?= htmlspecialchars($record['examination_date']) ?></span>
                         </div>
                     <?php endif; ?>
-                    
+                   
                     <!-- Physician/Dentist Notes if available -->
                     <?php if (isset($record['physician_notes']) && !empty($record['physician_notes'])): ?>
                         <div class="mt-4">
@@ -378,7 +401,7 @@ if ($type && $id) {
                             <p class="text-gray-900 bg-white p-3 rounded border"><?= htmlspecialchars($record['physician_notes']) ?></p>
                         </div>
                     <?php endif; ?>
-                    
+                   
                     <?php if (isset($record['dentist_notes']) && !empty($record['dentist_notes'])): ?>
                         <div class="mt-4">
                             <span class="font-medium text-gray-700 block mb-2">Dentist Notes:</span>
@@ -386,7 +409,7 @@ if ($type && $id) {
                         </div>
                     <?php endif; ?>
                 </div>
-                
+               
                 <!-- Current Status -->
                 <div class="mt-4 pt-4 border-t">
                     <p class="font-medium text-gray-700">Current Status:</p>
@@ -398,28 +421,35 @@ if ($type && $id) {
                 </div>
             </div>
 
+
             <!-- ✅ Action Buttons - ALL ROLES CAN VERIFY ANY FORM -->
             <form method="POST" class="flex justify-center gap-4">
                 <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
                 <input type="hidden" name="record_type" value="<?= $type; ?>">
 
-                <?php if ($record['verification_status'] !== 'verified'): ?>
+
+                <?php if ($record['verification_status'] === 'pending'): ?>
                     <button type="submit" name="action" value="verified"
                             class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
                         <i class="bi bi-check-circle"></i> Verify Submission
                     </button>
-                <?php else: ?>
+                   
+                    <button type="submit" name="action" value="rejected"
+                            class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
+                        <i class="bi bi-x-circle"></i> Reject Submission
+                    </button>
+                <?php elseif ($record['verification_status'] === 'verified'): ?>
                     <button type="button" disabled
                             class="bg-green-300 text-white px-6 py-2 rounded-lg shadow font-semibold flex items-center gap-2 cursor-not-allowed">
                         <i class="bi bi-check-circle"></i> Already Verified
                     </button>
+                <?php else: ?>
+                    <button type="button" disabled
+                            class="bg-red-300 text-white px-6 py-2 rounded-lg shadow font-semibold flex items-center gap-2 cursor-not-allowed">
+                        <i class="bi bi-x-circle"></i> Rejected
+                    </button>
                 <?php endif; ?>
-                
-                <button type="submit" name="action" value="rejected"
-                        class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
-                    <i class="bi bi-x-circle"></i> Reject Submission
-                </button>
-                
+               
                 <!-- Add Consult button - only show when verified AND (not dental exam OR user is dentist) -->
                 <?php if ($record['verification_status'] === 'verified' && ($type !== 'dental_form' || $user_role === 'dentist')): ?>
                 <a href="view_record.php?type=<?= $type ?>&id=<?= $record['record_id']; ?>"
@@ -427,23 +457,24 @@ if ($type && $id) {
                    <i class="bi bi-eye"></i> Consult
                 </a>
                 <?php endif; ?>
-                
+               
                 <a href="verify_submission.php?type=<?= $type ?>"
                    class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg shadow font-semibold transition-all flex items-center gap-2">
                    <i class="bi bi-arrow-left"></i> Back to List
                 </a>
             </form>
 
+
         <!-- ✅ All Submissions List -->
         <?php else: ?>
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-semibold text-orange-800">
-                    <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' Submissions' : 'All Submissions'; ?>
+                    <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' Pending Submissions' : 'All Pending Submissions'; ?>
                     <span class="text-sm font-normal text-gray-600 ml-2">
                         <?php if ($records): ?>
-                            (<?= $records->num_rows ?> record<?= $records->num_rows !== 1 ? 's' : '' ?>)
+                            (<?= $records->num_rows ?> pending record<?= $records->num_rows !== 1 ? 's' : '' ?>)
                         <?php else: ?>
-                            (0 records)
+                            (0 pending records)
                         <?php endif; ?>
                     </span>
                 </h3>
@@ -458,10 +489,11 @@ if ($type && $id) {
                         <a href="verify_submission.php?type=dental_form" class="filter-button text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">Dental Exams</a>
                     <?php endif; ?>
                     <?php if (count($allowed_types) > 1): ?>
-                        <a href="verify_submission.php" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">All Submissions</a>
+                        <a href="verify_submission.php" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold px-4 py-2 rounded hover:shadow transition-all">All Pending</a>
                     <?php endif; ?>
                 </div>
             </div>
+
 
             <?php if ($records && $records->num_rows > 0): ?>
                 <div class="overflow-x-auto">
@@ -488,10 +520,8 @@ if ($type && $id) {
                                     </td>
                                     <td class="py-3 px-4"><?= date('M j, Y', strtotime($r['examination_date'])); ?></td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-1 rounded-full text-xs font-semibold
-                                            <?= $r['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
-                                                ($r['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 'red-orange-badge-pending'); ?>">
-                                            <?= strtoupper($r['verification_status']); ?>
+                                        <span class="px-2 py-1 rounded-full text-xs font-semibold red-orange-badge-pending">
+                                            PENDING
                                         </span>
                                     </td>
                                     <td class="py-3 px-4">
@@ -515,15 +545,16 @@ if ($type && $id) {
                     </table>
                 </div>
 
+
             <?php else: ?>
                 <div class="text-center py-8">
                     <i class="bi bi-inbox text-4xl text-orange-400 mb-4"></i>
-                    <p class="text-orange-600 text-lg">No submissions found for verification.</p>
+                    <p class="text-orange-600 text-lg">No pending submissions found.</p>
                     <p class="text-orange-500 text-sm mt-2">
                         <?php if ($type): ?>
-                            No <?= str_replace('_', ' ', $type) ?> submissions found.
+                            No pending <?= str_replace('_', ' ', $type) ?> submissions found.
                         <?php else: ?>
-                            No submissions found for your assigned record types.
+                            No pending submissions found for your assigned record types.
                         <?php endif; ?>
                     </p>
                 </div>
@@ -532,5 +563,9 @@ if ($type && $id) {
     </div>
 </div>
 
+
 </body>
 </html>
+
+
+

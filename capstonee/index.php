@@ -3,13 +3,16 @@
 session_start();
 include 'config/database.php';
 
+
 $error = '';
 $success = '';
 $show_register_modal = false;
 
+
 // Debug information (remove in production)
 error_log("Index.php accessed - User ID: " . (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'not set'));
 error_log("Role: " . (isset($_SESSION['role']) ? $_SESSION['role'] : 'not set'));
+
 
 // Check if user is already logged in - IMPROVED VERSION
 if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
@@ -35,6 +38,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     }
     // If we're already on the correct page, don't redirect
 }
+
 
 // Process login form
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
@@ -62,6 +66,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['login_time'] = time();
 
+
                 // Use the SAME redirect method as above
                 $redirect_pages = [
                     'admin' => 'dashboard.php',
@@ -84,7 +89,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
     }
 }
 
-// Process STUDENT registration form
+
+// Process STUDENT registration form ONLY (Employee registration removed)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_student'])) {
     $sr_code = trim($_POST['sr_code']);
     $password = $_POST['password'];
@@ -99,6 +105,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_student'])) {
     $program = isset($_POST['program']) ? trim($_POST['program']) : '';
     $year_level = isset($_POST['year_level']) ? trim($_POST['year_level']) : '';
 
+
     if (empty($sr_code) || empty($password) || empty($confirm_password)) {
         $error = "All fields are required.";
     } elseif ($password !== $confirm_password) {
@@ -108,6 +115,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_student'])) {
         $stmt->bind_param("s", $sr_code);
         $stmt->execute();
         $result = $stmt->get_result();
+
 
         if ($result->num_rows > 0) {
             $error = "SR Code already registered.";
@@ -119,8 +127,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_student'])) {
             $full_name = trim(implode(' ', $name_parts));
             $email = '';
 
+
             $stmt = $conn->prepare("INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("sssss", $sr_code, $hashed_password, $full_name, $email, $role);
+
 
             if ($stmt->execute()) {
                 // Also insert into patients table
@@ -148,71 +158,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_student'])) {
     }
 }
 
-// Process EMPLOYEE registration form
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_employee'])) {
-    $employee_id = trim($_POST['employee_id']);
-    $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
-    $first_name = isset($_POST['first_name']) ? trim($_POST['first_name']) : '';
-    $middle_name = isset($_POST['middle_name']) ? trim($_POST['middle_name']) : '';
-    $last_name = isset($_POST['last_name']) ? trim($_POST['last_name']) : '';
-    $sex = isset($_POST['sex']) ? $_POST['sex'] : '';
-    $birthdate = isset($_POST['birthdate']) ? $_POST['birthdate'] : '';
-    $contact_number = isset($_POST['contact_number']) ? trim($_POST['contact_number']) : '';
-    $address = isset($_POST['address']) ? trim($_POST['address']) : '';
-    $department = isset($_POST['department']) ? trim($_POST['department']) : '';
-    $position = isset($_POST['position']) ? trim($_POST['position']) : '';
-    $employee_type = isset($_POST['employee_type']) ? $_POST['employee_type'] : '';
-
-    if (empty($employee_id) || empty($password) || empty($confirm_password)) {
-        $error = "All fields are required.";
-    } elseif ($password !== $confirm_password) {
-        $error = "Passwords do not match.";
-    } else {
-        $stmt = $conn->prepare("SELECT * FROM users WHERE username = ?");
-        $stmt->bind_param("s", $employee_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        if ($result->num_rows > 0) {
-            $error = "Employee ID already registered.";
-        } else {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $role = 'staff'; // Default role for employees
-            // Combine first name, middle name (if provided), and last name
-            $name_parts = array_filter([$first_name, $middle_name, $last_name]);
-            $full_name = trim(implode(' ', $name_parts));
-            $email = '';
-
-            $stmt = $conn->prepare("INSERT INTO users (username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("sssss", $employee_id, $hashed_password, $full_name, $email, $role);
-
-            if ($stmt->execute()) {
-                // Also insert into employees table if it exists
-                $date_of_birth = $birthdate;
-                
-                // Check if employees table exists and insert
-                $check_table = $conn->query("SHOW TABLES LIKE 'employees'");
-                if ($check_table->num_rows > 0) {
-                    $stmt_employee = $conn->prepare("INSERT INTO employees (employee_id, first_name, middle_name, last_name, date_of_birth, sex, contact_number, address, department, position, employee_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt_employee->bind_param("sssssssssss", $employee_id, $first_name, $middle_name, $last_name, $date_of_birth, $sex, $contact_number, $address, $department, $position, $employee_type);
-                    
-                    if (!$stmt_employee->execute()) {
-                        // Log error but don't fail registration
-                        error_log("Failed to insert employee record: " . $stmt_employee->error);
-                    }
-                    $stmt_employee->close();
-                }
-                
-                $success = "Employee registration successful! You can now log in.";
-                $show_employee_modal = false;
-            } else {
-                $error = "Registration failed. Please try again.";
-                $show_employee_modal = true;
-            }
-        }
-    }
-}
 
 // Handle logout
 if (isset($_GET['logout'])) {
@@ -231,6 +176,7 @@ if (isset($_GET['logout'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 
+
     <style>
         /* CSS Reset */
         * {
@@ -239,12 +185,14 @@ if (isset($_GET['logout'])) {
             box-sizing: border-box;
         }
 
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
             overflow-x: hidden;
         }
+
 
         /* BSU Brand Colors */
         :root {
@@ -265,6 +213,7 @@ if (isset($_GET['logout'])) {
             --green-800: #166534;
         }
 
+
         /* Utility Classes */
         .container {
             max-width: 1200px;
@@ -272,25 +221,31 @@ if (isset($_GET['logout'])) {
             padding: 0 20px;
         }
 
+
         .flex {
             display: flex;
         }
+
 
         .items-center {
             align-items: center;
         }
 
+
         .justify-between {
             justify-content: space-between;
         }
+
 
         .text-center {
             text-align: center;
         }
 
+
         .hidden {
             display: none;
         }
+
 
         /* Header Styles */
         .header {
@@ -302,11 +257,13 @@ if (isset($_GET['logout'])) {
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+
         .header.scrolled {
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
         }
+
 
         .nav {
             height: 64px;
@@ -316,6 +273,7 @@ if (isset($_GET['logout'])) {
             transition: all 0.3s ease;
         }
 
+
         .logo {
             display: flex;
             align-items: center;
@@ -323,9 +281,11 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .logo:hover {
             transform: translateY(-2px);
         }
+
 
         .logo-icon img {
             width: 40px;
@@ -335,9 +295,11 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .logo:hover .logo-icon img {
             transform: scale(1.1) rotate(5deg);
         }
+
 
         .logo-text h1 {
             margin: 0;
@@ -347,6 +309,7 @@ if (isset($_GET['logout'])) {
             line-height: 1.2;
         }
 
+
         .logo-text p {
             margin: 0;
             font-size: 0.9rem;
@@ -354,10 +317,12 @@ if (isset($_GET['logout'])) {
             line-height: 1.1;
         }
 
+
         .nav-links {
             display: none;
             gap: 32px;
         }
+
 
         .nav-links a {
             text-decoration: none;
@@ -367,10 +332,12 @@ if (isset($_GET['logout'])) {
             padding: 8px 0;
         }
 
+
         .nav-links a:hover {
             color: var(--red-800);
             transform: translateY(-2px);
         }
+
 
         .nav-links a::after {
             content: '';
@@ -384,9 +351,11 @@ if (isset($_GET['logout'])) {
             transform: translateX(-50%);
         }
 
+
         .nav-links a:hover::after {
             width: 100%;
         }
+
 
         .btn {
             padding: 8px 16px;
@@ -401,6 +370,7 @@ if (isset($_GET['logout'])) {
             overflow: hidden;
         }
 
+
         .btn::before {
             content: '';
             position: absolute;
@@ -412,14 +382,17 @@ if (isset($_GET['logout'])) {
             transition: left 0.5s;
         }
 
+
         .btn:hover::before {
             left: 100%;
         }
+
 
         .btn-primary {
             background: var(--red-800);
             color: white;
         }
+
 
         .btn-primary:hover {
             background: var(--red-900);
@@ -427,10 +400,12 @@ if (isset($_GET['logout'])) {
             box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
         }
 
+
         .btn-secondary {
             background: var(--yellow-500);
             color: var(--red-900);
         }
+
 
         .btn-secondary:hover {
             background: var(--yellow-600);
@@ -438,17 +413,20 @@ if (isset($_GET['logout'])) {
             box-shadow: 0 6px 20px rgba(234, 179, 8, 0.4);
         }
 
+
         .btn-outline {
             background: transparent;
             color: white;
             border: 1px solid white;
         }
 
+
         .btn-outline:hover {
             background: rgba(255,255,255,0.1);
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(255, 255, 255, 0.2);
         }
+
 
         /* Hero Section */
         .hero {
@@ -462,6 +440,7 @@ if (isset($_GET['logout'])) {
             overflow: hidden;
         }
 
+
         .hero::before {
             content: '';
             position: absolute;
@@ -470,12 +449,14 @@ if (isset($_GET['logout'])) {
             animation: gradientShift 8s ease-in-out infinite;
         }
 
+
         .hero-content {
             position: relative;
             z-index: 1;
             color: white;
             padding: 80px 0;
         }
+
 
         .hero-grid {
             display: grid;
@@ -484,6 +465,7 @@ if (isset($_GET['logout'])) {
             align-items: center;
         }
 
+
         .hero-text h1 {
             font-size: 48px;
             line-height: 1.1;
@@ -491,11 +473,13 @@ if (isset($_GET['logout'])) {
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
+
         .hero-text .highlight {
             color: #fcd34d;
             position: relative;
             display: inline-block;
         }
+
 
         .hero-text .highlight::after {
             content: '';
@@ -511,11 +495,13 @@ if (isset($_GET['logout'])) {
             animation: expandLine 1s ease-out 0.5s forwards;
         }
 
+
         .hero-text p {
             font-size: 20px;
             margin-bottom: 32px;
             text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
+
 
         .hero-buttons {
             display: flex;
@@ -524,11 +510,13 @@ if (isset($_GET['logout'])) {
             flex-wrap: wrap;
         }
 
+
         .hero-features {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 24px;
         }
+
 
         .feature-item {
             display: flex;
@@ -539,10 +527,12 @@ if (isset($_GET['logout'])) {
             border-radius: 8px;
         }
 
+
         .feature-item:hover {
             transform: translateX(8px);
             background: rgba(255, 255, 255, 0.1);
         }
+
 
         .feature-icon {
             width: 32px;
@@ -551,9 +541,11 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .feature-item:hover .feature-icon {
             transform: scale(1.2) rotate(10deg);
         }
+
 
         .qr-card {
             background: rgba(255,255,255,0.95);
@@ -566,10 +558,12 @@ if (isset($_GET['logout'])) {
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
+
         .qr-card:hover {
             transform: translateY(-8px) scale(1.02);
             box-shadow: 0 30px 50px rgba(0,0,0,0.25);
         }
+
 
         .qr-icon {
             width: 128px;
@@ -585,10 +579,12 @@ if (isset($_GET['logout'])) {
             animation: pulse 2s infinite;
         }
 
+
         .qr-card:hover .qr-icon {
             transform: scale(1.1) rotate(5deg);
             animation: none;
         }
+
 
         /* Features Section */
         .features {
@@ -596,10 +592,12 @@ if (isset($_GET['logout'])) {
             background: white;
         }
 
+
         .section-header {
             text-align: center;
             margin-bottom: 64px;
         }
+
 
         .section-header h2 {
             font-size: 36px;
@@ -608,6 +606,7 @@ if (isset($_GET['logout'])) {
             position: relative;
             display: inline-block;
         }
+
 
         .section-header h2::after {
             content: '';
@@ -622,9 +621,11 @@ if (isset($_GET['logout'])) {
             transition: width 0.3s ease;
         }
 
+
         .section-header:hover h2::after {
             width: 120px;
         }
+
 
         .section-header p {
             font-size: 20px;
@@ -633,12 +634,14 @@ if (isset($_GET['logout'])) {
             margin: 0 auto;
         }
 
+
         .features-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 24px;
             margin-bottom: 64px;
         }
+
 
         .feature-card {
             background: white;
@@ -650,6 +653,7 @@ if (isset($_GET['logout'])) {
             position: relative;
             overflow: hidden;
         }
+
 
         .feature-card::before {
             content: '';
@@ -664,15 +668,18 @@ if (isset($_GET['logout'])) {
             transition: transform 0.4s ease;
         }
 
+
         .feature-card:hover {
             box-shadow: 0 15px 30px rgba(0,0,0,0.15);
             transform: translateY(-8px);
             border-color: #fecaca;
         }
 
+
         .feature-card:hover::before {
             transform: scaleX(1);
         }
+
 
         .feature-card-icon {
             width: 48px;
@@ -687,10 +694,12 @@ if (isset($_GET['logout'])) {
             transition: all 0.4s ease;
         }
 
+
         .feature-card:hover .feature-card-icon {
             transform: scale(1.1) rotate(5deg);
             box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
         }
+
 
         .feature-card h3 {
             font-size: 18px;
@@ -699,9 +708,11 @@ if (isset($_GET['logout'])) {
             transition: color 0.3s ease;
         }
 
+
         .feature-card:hover h3 {
             color: var(--red-800);
         }
+
 
         .feature-card p {
             color: var(--gray-600);
@@ -709,11 +720,13 @@ if (isset($_GET['logout'])) {
             transition: color 0.3s ease;
         }
 
+
         /* About Section */
         .about {
             padding: 80px 0;
             background: var(--gray-100);
         }
+
 
         .about-grid {
             display: grid;
@@ -723,11 +736,13 @@ if (isset($_GET['logout'])) {
             margin-bottom: 64px;
         }
 
+
         .about-content h3 {
             font-size: 32px;
             color: var(--gray-900);
             margin-bottom: 24px;
         }
+
 
         .about-content p {
             color: var(--gray-600);
@@ -735,11 +750,13 @@ if (isset($_GET['logout'])) {
             line-height: 1.7;
         }
 
+
         .about-services {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 24px;
         }
+
 
         .service-list h4 {
             color: var(--red-800);
@@ -747,6 +764,7 @@ if (isset($_GET['logout'])) {
             position: relative;
             display: inline-block;
         }
+
 
         .service-list h4::after {
             content: '';
@@ -759,13 +777,16 @@ if (isset($_GET['logout'])) {
             transition: width 0.3s ease;
         }
 
+
         .service-list:hover h4::after {
             width: 50px;
         }
 
+
         .service-list ul {
             list-style: none;
         }
+
 
         .service-list li {
             color: var(--gray-600);
@@ -777,6 +798,7 @@ if (isset($_GET['logout'])) {
             position: relative;
         }
 
+
         .service-list li::before {
             content: '•';
             position: absolute;
@@ -785,20 +807,24 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .service-list li:hover {
             color: var(--red-800);
             transform: translateX(8px);
         }
 
+
         .service-list li:hover::before {
             transform: scale(1.5);
         }
+
 
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 24px;
         }
+
 
         .stat-card {
             background: white;
@@ -809,11 +835,13 @@ if (isset($_GET['logout'])) {
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+
         .stat-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             border-color: #fecaca;
         }
+
 
         .stat-icon {
             width: 48px;
@@ -828,9 +856,11 @@ if (isset($_GET['logout'])) {
             transition: all 0.3s ease;
         }
 
+
         .stat-card:hover .stat-icon {
             transform: scale(1.1) rotate(5deg);
         }
+
 
         .stat-number {
             font-size: 24px;
@@ -840,10 +870,12 @@ if (isset($_GET['logout'])) {
             transition: color 0.3s ease;
         }
 
+
         .stat-label {
             color: var(--gray-600);
             font-size: 14px;
         }
+
 
         /* Footer */
         .footer {
@@ -852,12 +884,14 @@ if (isset($_GET['logout'])) {
             padding: 48px 0 24px;
         }
 
+
         .footer-grid {
             display: grid;
             grid-template-columns: 2fr 1fr 1fr;
             gap: 32px;
             margin-bottom: 32px;
         }
+
 
         .footer-brand {
             display: flex;
@@ -867,9 +901,11 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .footer-brand:hover {
             transform: translateY(-2px);
         }
+
 
         .footer-brand-icon {
             background: linear-gradient(to right, var(--red-800), var(--yellow-500));
@@ -884,9 +920,11 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .footer-brand:hover .footer-brand-icon {
             transform: rotate(10deg);
         }
+
 
         .footer h4 {
             font-size: 18px;
@@ -894,6 +932,7 @@ if (isset($_GET['logout'])) {
             position: relative;
             display: inline-block;
         }
+
 
         .footer h4::after {
             content: '';
@@ -906,22 +945,27 @@ if (isset($_GET['logout'])) {
             transition: width 0.3s ease;
         }
 
+
         .footer h4:hover::after {
             width: 50px;
         }
 
+
         .footer ul {
             list-style: none;
         }
+
 
         .footer li {
             margin-bottom: 8px;
             transition: transform 0.3s ease;
         }
 
+
         .footer li:hover {
             transform: translateX(5px);
         }
+
 
         .footer a {
             color: #9ca3af;
@@ -929,9 +973,11 @@ if (isset($_GET['logout'])) {
             transition: all 0.3s ease;
         }
 
+
         .footer a:hover {
             color: white;
         }
+
 
         .footer-bottom {
             border-top: 1px solid #374151;
@@ -939,6 +985,7 @@ if (isset($_GET['logout'])) {
             text-align: center;
             color: #9ca3af;
         }
+
 
         /* Modal Styles */
         .modal {
@@ -953,11 +1000,13 @@ if (isset($_GET['logout'])) {
             animation: fadeIn 0.3s;
         }
 
+
         .modal.show {
             display: flex;
             align-items: center;
             justify-content: center;
         }
+
 
         .modal-content {
             background: white;
@@ -971,12 +1020,14 @@ if (isset($_GET['logout'])) {
             box-shadow: 0 25px 50px rgba(0,0,0,0.25);
         }
 
+
         .modal-header {
             background: linear-gradient(to right, var(--red-800), var(--yellow-500));
             padding: 24px 24px 24px 24px;
             text-align: center;
             border-radius: 12px 12px 0 0;
         }
+
 
         .modal-icon {
             width: 64px;
@@ -991,9 +1042,11 @@ if (isset($_GET['logout'])) {
             transition: transform 0.3s ease;
         }
 
+
         .modal:hover .modal-icon {
             transform: rotate(5deg);
         }
+
 
         .modal-title {
             color: white;
@@ -1001,14 +1054,17 @@ if (isset($_GET['logout'])) {
             font-weight: 600;
         }
 
+
         .modal-body {
             padding: 24px;
         }
+
 
         .form-group {
             margin-bottom: 16px;
             position: relative;
         }
+
 
         .form-label {
             display: block;
@@ -1017,6 +1073,7 @@ if (isset($_GET['logout'])) {
             color: var(--gray-900);
             transition: color 0.3s ease;
         }
+
 
         .form-input {
             width: 100%;
@@ -1027,6 +1084,7 @@ if (isset($_GET['logout'])) {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+
         .form-input:focus {
             outline: none;
             border-color: var(--red-800);
@@ -1034,38 +1092,13 @@ if (isset($_GET['logout'])) {
             transform: translateY(-2px);
         }
 
-        /* Registration Options Styles */
-        .registration-options {
-            display: grid;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .registration-option-card {
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 20px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .registration-option-card:hover {
-            border-color: var(--red-800);
-            transform: translateY(-4px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-        }
-
-        .registration-option-card.active {
-            border-color: var(--red-800);
-            background: var(--red-50);
-        }
 
         /* Password Toggle Styles */
         .password-input-container {
             position: relative;
             width: 100%;
         }
+
 
         .password-toggle-btn {
             position: absolute;
@@ -1082,15 +1115,18 @@ if (isset($_GET['logout'])) {
             z-index: 10;
         }
 
+
         .password-toggle-btn:hover {
             color: var(--red-800);
             background: rgba(220, 38, 38, 0.1);
         }
 
+
         .password-toggle-btn:focus {
             outline: none;
             box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
         }
+
 
         .form-row {
             display: flex;
@@ -1099,11 +1135,13 @@ if (isset($_GET['logout'])) {
             margin-bottom: 24px;
         }
 
+
         .checkbox-group {
             display: flex;
             align-items: center;
             gap: 8px;
         }
+
 
         .alert {
             background: #fef2f2;
@@ -1116,12 +1154,14 @@ if (isset($_GET['logout'])) {
             animation: shake 0.5s ease;
         }
 
+
         .success {
             background: #f0fdf4;
             border-color: #bbf7d0;
             color: #16a34a;
             animation: slideIn 0.5s ease;
         }
+
 
         /* Floating Login Button */
         .floating-btn {
@@ -1144,17 +1184,20 @@ if (isset($_GET['logout'])) {
             animation: float 3s ease-in-out infinite;
         }
 
+
         .floating-btn:hover {
             box-shadow: 0 8px 25px rgba(0,0,0,0.3);
             transform: scale(1.1) rotate(10deg);
             animation: none;
         }
 
+
         /* Animations */
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
 
         @keyframes slideIn {
             from { 
@@ -1167,10 +1210,12 @@ if (isset($_GET['logout'])) {
             }
         }
 
+
         @keyframes expandLine {
             from { transform: scaleX(0); }
             to { transform: scaleX(1); }
         }
+
 
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
@@ -1178,16 +1223,19 @@ if (isset($_GET['logout'])) {
             20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
 
+
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
 
+
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-10px); }
         }
+
 
         @keyframes gradientShift {
             0%, 100% { 
@@ -1197,6 +1245,7 @@ if (isset($_GET['logout'])) {
                 background: linear-gradient(to bottom right, rgba(234, 179, 8, 0.75), rgba(220, 38, 38, 0.75));
             }
         }
+
 
         /* Icons using CSS */
         .icon-heart::before { content: "\f004"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
@@ -1222,7 +1271,7 @@ if (isset($_GET['logout'])) {
         .icon-lock::before { content: "\f023"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
         .icon-check-circle::before { content: "\f058"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
         .icon-graduation-cap::before { content: "\f19d"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
-        .icon-briefcase::before { content: "\f0b1"; font-family: "Font Awesome 6 Free"; font-weight: 900; }
+
 
         [class^="icon-"]::before {
             display: inline-block;
@@ -1231,6 +1280,7 @@ if (isset($_GET['logout'])) {
             color: #fcf1f5ff;
             vertical-align: middle;
         }
+
 
         /* Form Styles */
         .form-section {
@@ -1259,6 +1309,7 @@ if (isset($_GET['logout'])) {
             background-size: 1.5em 1.5em;
             padding-right: 2.5rem;
         }
+
 
         /* ========== RESPONSIVE DESIGN ========== */
         
@@ -1549,7 +1600,6 @@ if (isset($_GET['logout'])) {
                 max-width: none;
             }
         }
-
     </style>
 </head>
 <body>
@@ -1582,6 +1632,7 @@ if (isset($_GET['logout'])) {
             </div>
         </nav>
     </header>
+
 
     <!-- Hero Section -->
     <section class="hero">
@@ -1642,6 +1693,7 @@ if (isset($_GET['logout'])) {
             </div>
         </div>
     </section>
+
 
     <!-- Features Section -->
     <section id="features" class="features">
@@ -1721,6 +1773,7 @@ if (isset($_GET['logout'])) {
             </div>
         </div>
     </section>
+
 
     <!-- About Section -->
     <section id="about" class="about">
@@ -1803,6 +1856,7 @@ if (isset($_GET['logout'])) {
         </div>
     </section>
 
+
     <!-- Footer -->
     <footer id="contact" class="footer">
         <div class="container">
@@ -1866,6 +1920,7 @@ if (isset($_GET['logout'])) {
         </div>
     </footer>
 
+
     <!-- Login Modal -->
     <div id="loginModal" class="modal">
         <div class="modal-content">
@@ -1880,11 +1935,13 @@ if (isset($_GET['logout'])) {
                     <p style="color: var(--gray-600); font-size: 14px;">Clinic Record Management System</p>
                 </div>
 
-                <?php if (!empty($error) && !isset($_POST['register_student']) && !isset($_POST['register_employee'])): ?>
+
+                <?php if (!empty($error) && !isset($_POST['register_student'])): ?>
                     <div class="alert">
                         <?php echo htmlspecialchars($error); ?>
                     </div>
                 <?php endif; ?>
+
 
                 <?php if (isset($login_success)): ?>
                     <div class="alert success">
@@ -1897,6 +1954,7 @@ if (isset($_GET['logout'])) {
                         }, 2000);
                     </script>
                 <?php endif; ?>
+
 
                 <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
                     <div class="form-group">
@@ -1930,7 +1988,7 @@ if (isset($_GET['logout'])) {
                             <input type="checkbox" id="remember" name="remember" style="border-radius: 4px; border-color: #d1d5db; color: var(--red-800);">
                             <label for="remember" style="font-size: 14px; color: var(--gray-600);">Remember Me</label>
                         </div>
-                        <a href="forgot_password.php" style="font-size: 14px; color: var(--red-800); text-decoration: none;">Forgot Password?</a>
+                        
                     </div>
                     
                     <button type="submit" name="login" class="btn btn-primary" style="width: 100%; margin-bottom: 16px; font-size: 18px; padding: 12px;">
@@ -1940,7 +1998,7 @@ if (isset($_GET['logout'])) {
                 
                 <div class="text-center">
                     <span style="color: var(--gray-600);">Don't have an account yet?</span>
-                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeLoginModal(); openRegisterOptionsModal();">Register</a>
+                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeLoginModal(); openStudentRegistrationModal()">Register as Student</a>
                 </div>
                 
                 <div style="border-top: 1px solid #e5e7eb; margin-top: 24px; padding-top: 16px; text-align: center; background: var(--gray-100); margin-left: -24px; margin-right: -24px; margin-bottom: -24px; padding: 16px; border-radius: 0 0 12px 12px;">
@@ -1952,63 +2010,6 @@ if (isset($_GET['logout'])) {
         </div>
     </div>
 
-    <!-- Registration Options Modal -->
-    <div id="registerOptionsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="modal-icon" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 4px solid white; background: white;">
-                <h2 class="modal-title">BSU Clinic Record Management System</h2>
-            </div>
-            
-            <div class="modal-body">
-                <div class="text-center" style="margin-bottom: 32px;">
-                    <h3 style="color: var(--red-800); margin-bottom: 8px; font-weight: 600;">Select Account Type</h3>
-                    <p style="color: var(--gray-600); font-size: 14px;">Choose your account type to proceed with registration</p>
-                </div>
-
-                <div class="registration-options" style="display: grid; gap: 16px; margin-bottom: 24px;">
-                    <!-- Student Registration Option -->
-                    <div class="registration-option-card" 
-                         onclick="openStudentRegistrationModal()" 
-                         style="border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.3s ease; text-align: center;">
-                        <div style="width: 60px; height: 60px; background: linear-gradient(to right, var(--red-800), var(--yellow-500)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                            <span class="icon-graduation-cap" style="color: white; font-size: 24px;"></span>
-                        </div>
-                        <h4 style="color: var(--gray-900); margin-bottom: 8px; font-weight: 600;">Student Registration</h4>
-                        <p style="color: var(--gray-600); font-size: 14px; margin-bottom: 12px;">
-                            For enrolled students of Batangas State University
-                        </p>
-                        <div style="display: flex; justify-content: center; gap: 8px;">
-                            <span style="background: var(--red-100); color: var(--red-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">SR Code Required</span>
-                            <span style="background: var(--blue-100); color: var(--blue-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Clinic Access</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Employee Registration Option -->
-                    <div class="registration-option-card" 
-                         onclick="openEmployeeRegistrationModal()" 
-                         style="border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.3s ease; text-align: center;">
-                        <div style="width: 60px; height: 60px; background: linear-gradient(to right, var(--blue-600), var(--green-500)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                            <span class="icon-briefcase" style="color: white; font-size: 24px;"></span>
-                        </div>
-                        <h4 style="color: var(--gray-900); margin-bottom: 8px; font-weight: 600;">Employee Registration</h4>
-                        <p style="color: var(--gray-600); font-size: 14px; margin-bottom: 12px;">
-                            For faculty, staff, and administrative personnel
-                        </p>
-                        <div style="display: flex; justify-content: center; gap: 8px;">
-                            <span style="background: var(--blue-100); color: var(--blue-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Employee ID</span>
-                            <span style="background: var(--green-100); color: var(--green-800); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Staff Access</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="text-center" style="margin-top: 24px;">
-                    <span style="color: var(--gray-600);">Already have an account?</span>
-                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeRegisterOptionsModal(); openLoginModal();">Back to Login</a>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Student Registration Modal -->
     <div id="studentRegistrationModal" class="modal">
@@ -2024,11 +2025,13 @@ if (isset($_GET['logout'])) {
                     <p style="color: var(--gray-600); font-size: 14px;">Secure your clinic portal access with your official SR Code</p>
                 </div>
 
+
                 <?php if (!empty($error) && isset($_POST['register_student'])): ?>
                     <div class="alert">
                         <span class="icon-exclamation-circle"></span> <?php echo htmlspecialchars($error); ?>
                     </div>
                 <?php endif; ?>
+
 
                 <?php if (!empty($success) && isset($_POST['register_student'])): ?>
                     <div class="alert success">
@@ -2041,6 +2044,7 @@ if (isset($_GET['logout'])) {
                         }, 2000);
                     </script>
                 <?php endif; ?>
+
 
                 <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
                     <!-- Personal Information Section -->
@@ -2080,7 +2084,7 @@ if (isset($_GET['logout'])) {
                             <label class="form-label" for="student_last_name">
                                 <span class="icon-person"></span> Last Name
                             </label>
-                            <input type="text" 
+                                <input type="text" 
                                    name="last_name" 
                                    id="student_last_name" 
                                    placeholder="Enter your last name"
@@ -2188,6 +2192,7 @@ if (isset($_GET['logout'])) {
                                    value="<?php echo isset($_POST['sr_code']) ? htmlspecialchars($_POST['sr_code']) : ''; ?>">
                         </div>
 
+
                         <div class="form-group">
                             <label class="form-label" for="student_password">
                                 <span class="icon-lock"></span> Password
@@ -2204,6 +2209,7 @@ if (isset($_GET['logout'])) {
                                 </button>
                             </div>
                         </div>
+
 
                         <div class="form-group">
                             <label class="form-label" for="student_confirm_password">
@@ -2231,263 +2237,17 @@ if (isset($_GET['logout'])) {
                 <div class="text-center">
                     <span style="color: var(--gray-600);">Already have an account?</span>
                     <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeStudentRegistrationModal(); openLoginModal();">Back to Login</a>
-                    <span style="color: var(--gray-600); margin: 0 8px;">or</span>
-                    <a href="#" style="color: var(--red-800); font-weight: 600; text-decoration: none;" onclick="closeStudentRegistrationModal(); openRegisterOptionsModal();">Choose Different Account Type</a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Employee Registration Modal -->
-    <div id="employeeRegistrationModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="modal-icon" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 4px solid white; background: white;">
-                <h2 class="modal-title">Employee Registration</h2>
-            </div>
-            
-            <div class="modal-body">
-                <div class="text-center" style="margin-bottom: 24px;">
-                    <h3 style="color: var(--red-800); margin-bottom: 4px; font-weight: 600;">Employee Account Registration</h3>
-                    <p style="color: var(--gray-600); font-size: 14px;">Secure your clinic portal access with your official Employee ID</p>
-                </div>
-
-                <?php if (!empty($error) && isset($_POST['register_employee'])): ?>
-                    <div class="alert">
-                        <span class="icon-exclamation-circle"></span> <?php echo htmlspecialchars($error); ?>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (!empty($success) && isset($_POST['register_employee'])): ?>
-                    <div class="alert success">
-                        <span class="icon-check-circle"></span> <?php echo htmlspecialchars($success); ?>
-                    </div>
-                    <script>
-                        setTimeout(function() {
-                            closeEmployeeRegistrationModal();
-                            openLoginModal();
-                        }, 2000);
-                    </script>
-                <?php endif; ?>
-
-                <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
-                    <!-- Personal Information Section -->
-                    <div class="form-section">
-                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
-                            <span class="icon-person"></span> Personal Information
-                        </h4>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="employee_first_name">
-                                    <span class="icon-person"></span> First Name
-                                </label>
-                                <input type="text" 
-                                       name="first_name" 
-                                       id="employee_first_name" 
-                                       placeholder="Enter your first name"
-                                       class="form-input" 
-                                       required
-                                       value="<?php echo isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : ''; ?>">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label" for="employee_middle_name">
-                                    <span class="icon-person"></span> Middle Name
-                                </label>
-                                <input type="text" 
-                                       name="middle_name" 
-                                       id="employee_middle_name" 
-                                       placeholder="Enter your middle name"
-                                       class="form-input"
-                                       value="<?php echo isset($_POST['middle_name']) ? htmlspecialchars($_POST['middle_name']) : ''; ?>">
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="employee_last_name">
-                                <span class="icon-person"></span> Last Name
-                            </label>
-                            <input type="text" 
-                                   name="last_name" 
-                                   id="employee_last_name" 
-                                   placeholder="Enter your last name"
-                                   class="form-input" 
-                                   required
-                                   value="<?php echo isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : ''; ?>">
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="employee_sex">
-                                    <span class="icon-gender"></span> Sex
-                                </label>
-                                <select name="sex" id="employee_sex" class="form-input" required>
-                                    <option value="">Select Sex</option>
-                                    <option value="Male" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Male') ? 'selected' : ''; ?>>Male</option>
-                                    <option value="Female" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Female') ? 'selected' : ''; ?>>Female</option>
-                                    <option value="Other" <?php echo (isset($_POST['sex']) && $_POST['sex'] == 'Other') ? 'selected' : ''; ?>>Other</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label" for="employee_birthdate">
-                                    <span class="icon-calendar"></span> Birthdate
-                                </label>
-                                <input type="date" 
-                                       name="birthdate" 
-                                       id="employee_birthdate" 
-                                       class="form-input" 
-                                       required
-                                       value="<?php echo isset($_POST['birthdate']) ? htmlspecialchars($_POST['birthdate']) : ''; ?>">
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="employee_contact_number">
-                                <span class="icon-phone"></span> Contact Number
-                            </label>
-                            <input type="tel" 
-                                   name="contact_number" 
-                                   id="employee_contact_number" 
-                                   placeholder="Enter your contact number"
-                                   class="form-input"
-                                   value="<?php echo isset($_POST['contact_number']) ? htmlspecialchars($_POST['contact_number']) : ''; ?>">
-                        </div>
-                        
-                        <!-- Address Section -->
-                        <div class="form-group">
-                            <label class="form-label" for="employee_address">
-                                <span class="icon-home"></span> Complete Address
-                            </label>
-                            <textarea name="address" 
-                                      id="employee_address" 
-                                      placeholder="Enter your complete address (House No., Street, Barangay, City/Municipality, Province)"
-                                      class="form-input"
-                                      rows="3"><?php echo isset($_POST['address']) ? htmlspecialchars($_POST['address']) : ''; ?></textarea>
-                        </div>
-                    </div>
-                    
-                    <!-- Employment Information Section -->
-                    <div class="form-section">
-                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
-                            <span class="icon-briefcase"></span> Employment Information
-                        </h4>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="employee_id">
-                                <span class="icon-person-badge"></span> Employee ID
-                            </label>
-                            <input type="text" 
-                                   name="employee_id" 
-                                   id="employee_id" 
-                                   placeholder="Enter your Employee ID"
-                                   class="form-input" 
-                                   required
-                                   value="<?php echo isset($_POST['employee_id']) ? htmlspecialchars($_POST['employee_id']) : ''; ?>">
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="department">
-                                    <span class="icon-building"></span> Department
-                                </label>
-                                <input type="text" 
-                                       name="department" 
-                                       id="department" 
-                                       placeholder="e.g., College of Engineering"
-                                       class="form-input"
-                                       value="<?php echo isset($_POST['department']) ? htmlspecialchars($_POST['department']) : ''; ?>">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label" for="position">
-                                    <span class="icon-user-tie"></span> Position
-                                </label>
-                                <input type="text" 
-                                       name="position" 
-                                       id="position" 
-                                       placeholder="e.g., Professor, Staff, etc."
-                                       class="form-input"
-                                       value="<?php echo isset($_POST['position']) ? htmlspecialchars($_POST['position']) : ''; ?>">
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="employee_type">
-                                <span class="icon-users"></span> Employee Type
-                            </label>
-                            <select name="employee_type" id="employee_type" class="form-input">
-                                <option value="">Select Employee Type</option>
-                                <option value="Faculty" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Faculty') ? 'selected' : ''; ?>>Faculty</option>
-                                <option value="Staff" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Staff') ? 'selected' : ''; ?>>Staff</option>
-                                <option value="Administrative" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Administrative') ? 'selected' : ''; ?>>Administrative</option>
-                                <option value="Maintenance" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Maintenance') ? 'selected' : ''; ?>>Maintenance</option>
-                                <option value="Other" <?php echo (isset($_POST['employee_type']) && $_POST['employee_type'] == 'Other') ? 'selected' : ''; ?>>Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- Account Information Section -->
-                    <div class="form-section">
-                        <h4 style="color: var(--red-800); margin-bottom: 16px; font-weight: 600; border-bottom: 1px solid var(--gray-300); padding-bottom: 8px;">
-                            <span class="icon-lock"></span> Account Information
-                        </h4>
-
-                        <div class="form-group">
-                            <label class="form-label" for="employee_password">
-                                <span class="icon-lock"></span> Password
-                            </label>
-                            <div class="password-input-container">
-                                <input type="password" 
-                                       name="password" 
-                                       id="employee_password" 
-                                       placeholder="Create a strong password"
-                                       class="form-input" 
-                                       required>
-                                <button type="button" class="password-toggle-btn" id="employeePasswordToggle" title="Show password">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="employee_confirm_password">
-                                <span class="icon-check-circle"></span> Confirm Password
-                            </label>
-                            <div class="password-input-container">
-                                <input type="password" 
-                                       name="confirm_password" 
-                                       id="employee_confirm_password" 
-                                       placeholder="Re-enter password"
-                                       class="form-input" 
-                                       required>
-                                <button type="button" class="password-toggle-btn" id="employeeConfirmPasswordToggle" title="Show password">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" name="register_employee" class="btn btn-primary" style="width: 100%; margin-bottom: 16px; font-size: 18px; padding: 12px;">
-                        <span class="icon-person-check"></span> Register as Employee
-                    </button>
-                </form>
-                
-                <div class="text-center">
-                    <span style="color: var(--gray-600);">Already have an account?</span>
-                    <a href="#" style="color: #2563eb; font-weight: 600; text-decoration: none; margin-left: 4px;" onclick="closeEmployeeRegistrationModal(); openLoginModal();">Back to Login</a>
-                    <span style="color: var(--gray-600); margin: 0 8px;">or</span>
-                    <a href="#" style="color: var(--red-800); font-weight: 600; text-decoration: none;" onclick="closeEmployeeRegistrationModal(); openRegisterOptionsModal();">Choose Different Account Type</a>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Floating Login Button -->
     <button class="floating-btn" onclick="openLoginModal()" title="Login">
         <span class="icon-login"></span>
     </button>
+
 
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
@@ -2500,13 +2260,16 @@ if (isset($_GET['logout'])) {
             disable: window.innerWidth < 768
         });
 
+
         // Mobile menu functionality
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
         const navLinks = document.getElementById('navLinks');
 
+
         function toggleMobileMenu() {
             navLinks.classList.toggle('active');
         }
+
 
         // Handle responsive menu
         function handleResponsiveMenu() {
@@ -2519,51 +2282,32 @@ if (isset($_GET['logout'])) {
             }
         }
 
+
         // Modal functionality
         function openLoginModal() {
             document.getElementById('loginModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
 
+
         function closeLoginModal() {
             document.getElementById('loginModal').classList.remove('show');
             document.body.style.overflow = '';
         }
 
-        // Registration Options Modal Functions
-        function openRegisterOptionsModal() {
-            document.getElementById('registerOptionsModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeRegisterOptionsModal() {
-            document.getElementById('registerOptionsModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
 
         // Student Registration Modal Functions
         function openStudentRegistrationModal() {
-            closeRegisterOptionsModal();
             document.getElementById('studentRegistrationModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
+
 
         function closeStudentRegistrationModal() {
             document.getElementById('studentRegistrationModal').classList.remove('show');
             document.body.style.overflow = '';
         }
 
-        // Employee Registration Modal Functions
-        function openEmployeeRegistrationModal() {
-            closeRegisterOptionsModal();
-            document.getElementById('employeeRegistrationModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeEmployeeRegistrationModal() {
-            document.getElementById('employeeRegistrationModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
 
         // Password visibility toggle functionality
         function togglePasswordVisibility(inputId, toggleBtn) {
@@ -2583,6 +2327,7 @@ if (isset($_GET['logout'])) {
             }
         }
 
+
         // Initialize password toggle buttons
         function initializePasswordToggles() {
             // Login modal password toggle
@@ -2593,6 +2338,7 @@ if (isset($_GET['logout'])) {
                 });
             }
 
+
             // Student registration password toggles
             const studentPasswordToggle = document.getElementById('studentPasswordToggle');
             if (studentPasswordToggle) {
@@ -2601,28 +2347,15 @@ if (isset($_GET['logout'])) {
                 });
             }
 
+
             const studentConfirmPasswordToggle = document.getElementById('studentConfirmPasswordToggle');
             if (studentConfirmPasswordToggle) {
                 studentConfirmPasswordToggle.addEventListener('click', function() {
                     togglePasswordVisibility('student_confirm_password', this);
                 });
             }
-
-            // Employee registration password toggles
-            const employeePasswordToggle = document.getElementById('employeePasswordToggle');
-            if (employeePasswordToggle) {
-                employeePasswordToggle.addEventListener('click', function() {
-                    togglePasswordVisibility('employee_password', this);
-                });
-            }
-
-            const employeeConfirmPasswordToggle = document.getElementById('employeeConfirmPasswordToggle');
-            if (employeeConfirmPasswordToggle) {
-                employeeConfirmPasswordToggle.addEventListener('click', function() {
-                    togglePasswordVisibility('employee_confirm_password', this);
-                });
-            }
         }
+
 
         // Close modal when clicking outside
         document.addEventListener('click', function(e) {
@@ -2632,15 +2365,15 @@ if (isset($_GET['logout'])) {
             }
         });
 
+
         // Close modal with Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeLoginModal();
-                closeRegisterOptionsModal();
                 closeStudentRegistrationModal();
-                closeEmployeeRegistrationModal();
             }
         });
+
 
         // Smooth scrolling for navigation links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -2656,6 +2389,7 @@ if (isset($_GET['logout'])) {
             });
         });
 
+
         // Header scroll effect
         window.addEventListener('scroll', function() {
             const header = document.getElementById('header');
@@ -2666,20 +2400,21 @@ if (isset($_GET['logout'])) {
             }
         });
 
+
         // Viewport height fix for mobile
         function setVH() {
             let vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
         }
 
+
         // Show appropriate modal based on PHP conditions
-        <?php if ((!empty($error) && !isset($_POST['register_student']) && !isset($_POST['register_employee'])) || isset($login_success)): ?>
+        <?php if ((!empty($error) && !isset($_POST['register_student'])) || isset($login_success)): ?>
             openLoginModal();
         <?php elseif ((!empty($error) && isset($_POST['register_student'])) || (!empty($success) && isset($_POST['register_student']))): ?>
             openStudentRegistrationModal();
-        <?php elseif ((!empty($error) && isset($_POST['register_employee'])) || (!empty($success) && isset($_POST['register_employee']))): ?>
-            openEmployeeRegistrationModal();
         <?php endif; ?>
+
 
         // Auto-hide success messages
         document.addEventListener('DOMContentLoaded', function() {
@@ -2701,11 +2436,13 @@ if (isset($_GET['logout'])) {
             initializePasswordToggles();
         });
 
+
         // Window resize handlers
         window.addEventListener('resize', function() {
             handleResponsiveMenu();
             setVH();
         });
+
 
         // Orientation change handler
         window.addEventListener('orientationchange', function() {
@@ -2715,3 +2452,6 @@ if (isset($_GET['logout'])) {
     
 </body>
 </html>
+
+
+

@@ -4,6 +4,7 @@ ini_set('display_errors', 1);
 session_start();
 include __DIR__ . '/../config/database.php';
 
+
 // Redirect to login if not authenticated
 if (!isset($_SESSION['user_id'])) {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
@@ -12,10 +13,12 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+
 $success_message = '';
 $error_message = '';
 $user_role = $_SESSION['role'] ?? 'student';
 $is_staff_user = in_array($user_role, ['doctor', 'nurse', 'dentist', 'staff', 'admin']);
+
 
 // Fetch logged-in user's patient data from registration
 $patient_data = null;
@@ -26,40 +29,42 @@ if (isset($_SESSION['username'])) {
     $result = $stmt->get_result();
     if ($result->num_rows > 0) {
         $patient_data = $result->fetch_assoc();
-        
+       
         // Calculate age from date_of_birth if age is not set or empty
         if (empty($patient_data['age']) && !empty($patient_data['date_of_birth'])) {
             $dob = new DateTime($patient_data['date_of_birth']);
             $now = new DateTime();
             $patient_data['age'] = $now->diff($dob)->y;
         }
-        
+       
         // Create middle initial
         $patient_data['middle_initial'] = !empty($patient_data['middle_name']) ? substr($patient_data['middle_name'], 0, 1) . '.' : '';
-        
+       
         // Create formatted name with proper capitalization
         $patient_data['first_name_cap'] = ucwords(strtolower($patient_data['first_name']));
         $patient_data['middle_initial_cap'] = !empty($patient_data['middle_initial']) ? strtoupper($patient_data['middle_initial'][0]) . '.' : '';
         $patient_data['last_name_cap'] = ucwords(strtolower($patient_data['last_name']));
-        
-        $patient_data['full_name_formatted'] = $patient_data['first_name_cap'] . 
-                                              (!empty($patient_data['middle_initial_cap']) ? ' ' . $patient_data['middle_initial_cap'] : '') . 
+       
+        $patient_data['full_name_formatted'] = $patient_data['first_name_cap'] .
+                                              (!empty($patient_data['middle_initial_cap']) ? ' ' . $patient_data['middle_initial_cap'] : '') .
                                               ' ' . $patient_data['last_name_cap'];
     }
     $stmt->close();
 }
 
+
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Get patient ID or create new patient
     $patient_id = isset($_POST['patient_id']) ? $_POST['patient_id'] : null;
-    
+   
     if (!$patient_id) {
         // Check if student already exists
         $check = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
         $check->bind_param("s", $_POST['student_id']);
         $check->execute();
         $check_result = $check->get_result();
+
 
         if ($check_result->num_rows > 0) {
             // Student already exists — reuse their patient_id
@@ -76,32 +81,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         }
     }
-    
+   
     if ($patient_id) {
         // Create medical record entry
         $stmt = $conn->prepare("INSERT INTO medical_records (patient_id, record_type, examination_date, physician_name) VALUES (?, 'medical_exam', ?, ?)");
         $examination_date = date('Y-m-d');
         $physician_name = $_POST['physician_name'] ?? '';
         $stmt->bind_param("iss", $patient_id, $examination_date, $physician_name);
-        
+       
         if ($stmt->execute()) {
             $record_id = $conn->insert_id;
-            
-            // Insert medical exam data
+           
             $stmt = $conn->prepare("
-                INSERT INTO medical_exams (
-                    record_id, height, weight, bmi, blood_pressure, pulse_rate, temperature,
-                    vision_status, physical_findings, diagnostic_results, classification,
-                    recommendations, physician_name, license_no
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
+    INSERT INTO medical_exams (
+        record_id, height, weight, bmi, blood_pressure, heart_rate, temperature,
+        vision_status, physical_findings, diagnostic_results, classification,
+        recommendations, physician_name, license_no
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+");
+
 
             // Get form data with proper defaults
             $height = $_POST['height_cert'] ?? '';
             $weight = $_POST['weight_cert'] ?? '';
             $bmi = $_POST['bmi'] ?? '';
             $blood_pressure = $_POST['blood_pressure'] ?? '';
-            $pulse_rate = $_POST['pulse_rate'] ?? '';
+            $heart_rate = $_POST['heart_rate'] ?? '';
             $temperature = $_POST['temperature'] ?? '';
             $vision_status = $_POST['vision_status'] ?? '';
             $physical_findings = $_POST['physical_findings'] ?? '';
@@ -111,46 +116,52 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $physician_name = $_POST['physician_name'] ?? '';
             $license_no = $_POST['license_no'] ?? '';
 
+
             $stmt->bind_param(
-                "isssssssssssss",
-                $record_id,
-                $height,
-                $weight,
-                $bmi,
-                $blood_pressure,
-                $pulse_rate,
-                $temperature,
-                $vision_status,
-                $physical_findings,
-                $diagnostic_results,
-                $classification,
-                $recommendations,
-                $physician_name,
-                $license_no
-            );
+    "isssssssssssss",
+    $record_id,
+    $height,
+    $weight,
+    $bmi,
+    $blood_pressure,
+    $heart_rate,
+    $temperature,
+    $vision_status,
+    $physical_findings,
+    $diagnostic_results,
+    $classification,
+    $recommendations,
+    $physician_name,
+    $license_no
+);
+
 
             if ($stmt->execute()) {
                 // Generate QR code for this record
                 $qr_data = "record_id=" . $record_id . "&type=medical_exam&date=" . $examination_date;
                 $qr_code = base64_encode($qr_data);
 
+
                 // Update patient with QR code
                 $stmt = $conn->prepare("UPDATE patients SET qr_code = ? WHERE id = ?");
                 $stmt->bind_param("si", $qr_code, $patient_id);
                 $stmt->execute();
 
+
                 // Add to analytics data
                 $stmt = $conn->prepare("INSERT INTO analytics_data (data_type, data_value, data_label, data_date) VALUES ('medical_exam', 1, 'New Medical Exam', CURDATE())");
                 $stmt->execute();
 
+
                 // Log user activity
                 $activity_type = 'medical_exam';
                 $description = 'Medical Examination Form Submitted';
-                
+               
                 $activity_stmt = $conn->prepare("INSERT INTO user_activities (user_id, activity_type, activity_description) VALUES (?, ?, ?)");
                 $activity_stmt->bind_param("iss", $_SESSION['user_id'], $activity_type, $description);
                 $activity_stmt->execute();
                 $activity_stmt->close();
+
 
                 $success_message = "Medical examination form successfully submitted! Please wait for admin verification.";
             } else {
@@ -162,6 +173,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -191,7 +203,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             font-size: 0.9rem;
             margin-bottom: 2rem;
         }
-        
+       
         /* Form field styling */
         .auto-filled {
             background-color: #f0fff4 !important;
@@ -201,13 +213,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #fff7ed !important;
             border-color: #fed7aa !important;
         }
-        
+       
         /* Print Styles - Hide navigation, buttons, and non-form elements */
         @media print {
             /* Hide navigation bar, header, and any includes */
-            header, nav, .navbar, .navigation, 
+            header, nav, .navbar, .navigation,
             /* Hide buttons */
-            button, .btn, a[href], 
+            button, .btn, a[href],
             /* Hide back to dashboard button */
             a[href*="dashboard"],
             /* Hide save and print buttons */
@@ -221,18 +233,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 display: none !important;
                 visibility: hidden !important;
             }
-            
+           
             /* Hide the container with back button */
             .max-w-5xl.mx-auto.px-4.mb-6 {
                 display: none !important;
             }
-            
+           
             /* Reset page margins for printing */
             @page {
                 margin: 0.5cm;
                 size: A4 landscape;
             }
-            
+           
             /* Ensure form content prints properly */
             body {
                 margin: 0 !important;
@@ -241,32 +253,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            
+           
             /* Hide the outer gray background container */
             .bg-gray-100.min-h-screen {
                 background: white !important;
                 padding: 0 !important;
                 margin: 0 !important;
             }
-            
+           
             /* Make sure form container prints full width */
             .max-w-5xl {
                 max-width: 100% !important;
                 margin: 0 auto !important;
                 padding: 0 10px !important;
             }
-            
+           
             /* Remove shadows and rounded corners for cleaner print */
             .shadow-lg, .shadow, .rounded-lg, .rounded-t-lg {
                 box-shadow: none !important;
                 border-radius: 0 !important;
             }
-            
+           
             /* Ensure form content is visible */
             .bg-white {
                 background: white !important;
             }
-            
+           
             /* Print form only - show the white form container */
             .bg-white.rounded-lg.shadow-lg {
                 margin: 0 !important;
@@ -274,14 +286,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 box-shadow: none !important;
                 border: none !important;
             }
-            
+           
             /* Ensure form header (title) prints */
             .red-orange-gradient {
                 background: #dc2626 !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            
+           
             /* Hide any sticky elements */
             .sticky {
                 position: static !important;
@@ -290,7 +302,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </style>
 </head>
 <body>
-    
+   
     <div class="bg-gray-100 min-h-screen py-8">
         <div class="max-w-5xl mx-auto px-4 mb-6 no-print">
             <a href="../user_dashboard.php" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow mb-4 transition">Back to Dashboard</a>
@@ -312,7 +324,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <?php echo $error_message; ?>
                         </div>
                     <?php endif; ?>
-                    
+                   
                     <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" id="medicalForm">
                         <!-- Hidden fields for auto-filled data -->
                         <input type="hidden" id="first_name" name="first_name" value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>">
@@ -320,17 +332,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <input type="hidden" id="last_name" name="last_name" value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>">
                         <input type="hidden" id="sex" name="sex" value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>">
                         <input type="hidden" id="student_id" name="student_id" value="<?php echo isset($patient_data['student_id']) ? htmlspecialchars($patient_data['student_id']) : ''; ?>">
-                        
+                       
                         <!-- Personal Info - Student Section -->
                         <div class="student-section rounded-lg p-6 mb-8">
                             <h3 class="text-lg font-bold text-blue-700 mb-4">Personal Information</h3>
-                            
+                           
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Last Name</label>
-                                    <input type="text" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>" 
+                                    <input type="text"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['last_name_cap'])): ?>
@@ -340,12 +352,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <?php endif; ?>
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">First Name</label>
-                                    <input type="text" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>" 
+                                    <input type="text"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['first_name_cap'])): ?>
@@ -355,12 +367,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <?php endif; ?>
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Middle Name</label>
-                                    <input type="text" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo isset($patient_data['middle_name']) ? htmlspecialchars(ucwords(strtolower($patient_data['middle_name']))) : ''; ?>" 
+                                    <input type="text"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo isset($patient_data['middle_name']) ? htmlspecialchars(ucwords(strtolower($patient_data['middle_name']))) : ''; ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['middle_name'])): ?>
@@ -371,13 +383,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     </p>
                                 </div>
                             </div>
-                            
+                           
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Sex</label>
-                                    <input type="text" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>" 
+                                    <input type="text"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo isset($patient_data['sex']) ? htmlspecialchars($patient_data['sex']) : ''; ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['sex'])): ?>
@@ -387,49 +399,49 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <?php endif; ?>
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
                                     <label class="block text-xs font-semibold text-orange-700">Cellphone No.</label>
-                                    <input type="text" 
-                                           name="cellphone_no" 
-                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                    <input type="text"
+                                           name="cellphone_no"
+                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                            value="<?php echo htmlspecialchars($patient_data['contact_number'] ?? ''); ?>">
                                     <p class="text-xs text-orange-600 mt-1 flex items-center">
                                         <i class="bi bi-pencil-square mr-1"></i> Please enter your cellphone number
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
                                     <label class="block text-xs font-semibold text-orange-700">Address</label>
-                                    <input type="text" 
-                                           name="address" 
-                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                    <input type="text"
+                                           name="address"
+                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                            value="<?php echo htmlspecialchars($patient_data['address'] ?? ''); ?>">
                                     <p class="text-xs text-orange-600 mt-1 flex items-center">
                                         <i class="bi bi-pencil-square mr-1"></i> Please enter your address
                                     </p>
                                 </div>
                             </div>
-                            
+                           
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Date</label>
-                                    <input type="date" 
-                                           name="date_of_examination" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo date('Y-m-d'); ?>" 
+                                    <input type="date"
+                                           name="date_of_examination"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo date('Y-m-d'); ?>"
                                            required>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <i class="bi bi-info-circle mr-1"></i> Today's date
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Birthday</label>
-                                    <input type="date" 
-                                           name="date_of_birth" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo htmlspecialchars($patient_data['date_of_birth'] ?? ''); ?>" 
+                                    <input type="date"
+                                           name="date_of_birth"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['date_of_birth'] ?? ''); ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['date_of_birth'])): ?>
@@ -439,13 +451,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <?php endif; ?>
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Age</label>
-                                    <input type="number" 
-                                           name="age" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo htmlspecialchars($patient_data['age'] ?? ''); ?>" 
+                                    <input type="number"
+                                           name="age"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['age'] ?? ''); ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['age'])): ?>
@@ -456,12 +468,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     </p>
                                 </div>
                             </div>
-                            
+                           
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                 <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
                                     <label class="block text-xs font-semibold text-orange-700">Civil Status</label>
-                                    <select name="civil_status" 
-                                            class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                    <select name="civil_status"
+                                            class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                             required>
                                         <option value="">Select Civil Status</option>
                                         <option value="Single" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
@@ -474,23 +486,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <i class="bi bi-pencil-square mr-1"></i> Please select your civil status
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
                                     <label class="block text-xs font-semibold text-orange-700">Tel. No.</label>
-                                    <input type="text" 
-                                           name="tel_no" 
+                                    <input type="text"
+                                           name="tel_no"
                                            class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
                                     <p class="text-xs text-orange-600 mt-1 flex items-center">
                                         <i class="bi bi-pencil-square mr-1"></i> Please enter telephone number
                                     </p>
                                 </div>
-                                
+                               
                                 <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                     <label class="block text-xs font-semibold text-green-700">Position/Program/Campus</label>
-                                    <input type="text" 
-                                           name="program" 
-                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800" 
-                                           value="<?php echo htmlspecialchars($patient_data['program'] ?? ''); ?>" 
+                                    <input type="text"
+                                           name="program"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['program'] ?? ''); ?>"
                                            readonly>
                                     <p class="text-xs text-green-600 mt-1 flex items-center">
                                         <?php if (isset($patient_data['program'])): ?>
@@ -501,18 +513,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     </p>
                                 </div>
                             </div>
-                            
+                           
                             <!-- Information Legend -->
                             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
                                 <h5 class="text-sm font-bold text-blue-700 mb-2 flex items-center">
                                     <i class="bi bi-info-circle-fill mr-2"></i> Form Information
                                 </h5>
                                 <p class="text-blue-600 text-xs mb-1">
-                                    <i class="bi bi-check-circle-fill text-green-500 mr-1"></i> 
+                                    <i class="bi bi-check-circle-fill text-green-500 mr-1"></i>
                                     <span class="font-semibold">Green fields</span> are auto-filled from your registration.
                                 </p>
                                 <p class="text-blue-600 text-xs">
-                                    <i class="bi bi-pencil-square text-orange-500 mr-1"></i> 
+                                    <i class="bi bi-pencil-square text-orange-500 mr-1"></i>
                                     <span class="font-semibold">Orange fields</span> require manual input.
                                 </p>
                             </div>
@@ -571,6 +583,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </div>
                         </div>
 
+
                     <!-- Diagnostic Examination - Physician Only -->
                     <div class="rounded-lg p-6 mb-8">
                             <h3 class="text-lg font-bold text-blue-700 mb-4 disabled-label">Diagnostic Examination (For Physician Use Only)</h3>
@@ -608,10 +621,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </div>
                         </div>
 
+
                         <!-- Certification - Mixed Sections -->
                         <div class="rounded-lg p-6 mb-8">
                             <h3 class="text-lg font-bold text-blue-700 mb-4">Certification</h3>
-                            
+                           
                             <!-- Student Section -->
                             <div class="student-section rounded-lg p-4 mb-6">
                                 <h4 class="text-md font-bold text-blue-600 mb-3">Student Information</h4>
@@ -636,6 +650,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     </div>
                                 </div>
                             </div>
+
 
                             <!-- Physician Only Section -->
                             <div class="rounded-lg p-4 mb-6">
@@ -667,6 +682,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 </div>
                             </div>
 
+
                             <!-- Signatures Section -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                                 <!-- Student Signature -->
@@ -688,6 +704,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </div>
                         </div>
 
+
                     <?php endif; ?>
                         <!-- Data Privacy Act Notice -->
                         <div class="border-2 border-red-400 rounded-lg bg-white shadow p-4 mb-6">
@@ -701,7 +718,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </div>
     </div>
-    
+   
     <script src="../../assets/js/jquery.min.js"></script>
     <script src="../../assets/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -714,7 +731,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             });
         });
     </script>
-    
+   
     <?php if (!empty($success_message)): ?>
     <script>
         alert("Medical examination form successfully submitted! Please wait for admin verification.");
@@ -723,3 +740,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php endif; ?>
 </body>
 </html>
+
+
+

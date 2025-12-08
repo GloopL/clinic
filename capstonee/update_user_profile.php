@@ -127,34 +127,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         // Sync with patients table for form pre-population
-        if (isset($success) && $success) {
-            $student_id = $user_data['username']; // SR Code from users table
+if (isset($success) && $success) {
+    $student_id = $user_data['username']; // SR Code from users table
 
-            // Check if patient record exists
-            $check_patient = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
-            $check_patient->bind_param("s", $student_id);
-            $check_patient->execute();
-            $patient_result = $check_patient->get_result();
+    // Check if patient record exists
+    $check_patient = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
+    $check_patient->bind_param("s", $student_id);
+    $check_patient->execute();
+    $patient_result = $check_patient->get_result();
 
-            if ($patient_result->num_rows > 0) {
-                // Update existing patient record
-                $stmt = $conn->prepare("UPDATE patients SET first_name=?, middle_name=?, last_name=?, date_of_birth=?, sex=?, program=?, year_level=? WHERE student_id=?");
-                $stmt->bind_param("ssssssss", $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $student_id);
-            } else {
-                // Create new patient record
-                $stmt = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssssssss", $student_id, $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level);
-            }
+    if ($patient_result->num_rows > 0) {
+        // Update existing patient record WITH ADDRESS
+        $stmt = $conn->prepare("UPDATE patients SET first_name=?, middle_name=?, last_name=?, date_of_birth=?, sex=?, program=?, year_level=?, address=? WHERE student_id=?");
+        $stmt->bind_param("sssssssss", $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address, $student_id);
+    } else {
+        // Create new patient record WITH ADDRESS
+        $stmt = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssssssss", $student_id, $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address);
+    }
 
-            if ($stmt->execute()) {
-                // Patient record updated/created successfully
-            } else {
-                // Don't fail the whole operation for patient sync error, just log it
-                error_log("Patient sync error: " . $stmt->error);
-            }
-            $stmt->close();
-            $check_patient->close();
-        }
+    if ($stmt->execute()) {
+        // Patient record updated/created successfully
+    } else {
+        // Don't fail the whole operation for patient sync error, just log it
+        error_log("Patient sync error: " . $stmt->error);
+    }
+    $stmt->close();
+    $check_patient->close();
+}
 
         // Update email in users table if successful
         if (isset($success) && $success) {

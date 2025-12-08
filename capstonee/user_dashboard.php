@@ -1678,51 +1678,59 @@ function generateDefaultAvatar($username) {
     }
 
     function submitForm(event, formType) {
-        event.preventDefault();
+    event.preventDefault();
 
-        const form = event.target;
-        const formData = new FormData(form);
+    const form = event.target;
+    const formData = new FormData(form);
 
-        // Show loading state
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Submitting...';
-        submitBtn.disabled = true;
-
-        fetch(`modules/user_${formType}_form.php`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.text())
-        .then(result => {
-            // Check if submission was successful
-            if (result.includes('successfully submitted') || result.includes('Form successfully submitted')) {
-                // Show success message
-                alert('Form submitted successfully! Please wait for admin verification.');
-
-                // Close modal
-                closeFormModal();
-
-                // Refresh the page to update recent submissions
-                location.reload();
-            } else {
-                // Show error message
-                alert('Error submitting form. Please try again.');
-            }
-        })
-        .catch(error => {
-            console.error('Error submitting form:', error);
-            alert('Error submitting form. Please try again.');
-        })
-        .finally(() => {
-            // Restore button state
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        });
+    // Check if this is a history form that's already been submitted
+    if (formType === 'history' && <?php echo isset($submitted_forms['history_form']) ? 'true' : 'false'; ?>) {
+        // Ask for confirmation since they already have a submission
+        if (!confirm('You have already submitted a history form. Do you want to submit a new one? The previous submission will not be deleted, but clinic staff will see this new version.')) {
+            return;
+        }
     }
+
+    // Show loading state
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Submitting...';
+    submitBtn.disabled = true;
+
+    fetch(`modules/user_${formType}_form.php`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.text())
+    .then(result => {
+        // Check if submission was successful
+        if (result.includes('successfully submitted') || result.includes('Form successfully submitted') || result.includes('successfully')) {
+            // Show success message
+            alert('Form submitted successfully! Please wait for admin verification.');
+
+            // Close modal
+            closeFormModal();
+
+            // Refresh the page to update recent submissions
+            location.reload();
+        } else {
+            // Show error message
+            alert('Error submitting form. Please try again. Server response: ' + result.substring(0, 200));
+        }
+    })
+    .catch(error => {
+        console.error('Error submitting form:', error);
+        alert('Error submitting form. Please try again.');
+    })
+    .finally(() => {
+        // Restore button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
 
     // Close modal when clicking outside
     document.getElementById('formModal').addEventListener('click', function(e) {

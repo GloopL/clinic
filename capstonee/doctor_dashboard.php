@@ -211,7 +211,7 @@ $stmt->execute();
           <h2 class="text-lg font-semibold text-orange-900">Welcome, Dr. <?php echo htmlspecialchars($greeting_display); ?>!</h2>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <div class="stats-card-1 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
             <i class="bi bi-people-fill text-4xl mb-2"></i>
             <h3 class="text-3xl font-bold"><?php echo $total_patients; ?></h3>
@@ -219,16 +219,28 @@ $stmt->execute();
             <a href="modules/records/patients.php" class="mt-4 bg-white text-red-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-red-50 transition">View All</a>
           </div>
           <div class="stats-card-2 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
+    <i class="bi bi-file-earmark-check-fill text-4xl mb-2"></i>
+    <?php
+    // Get count of forms with verification_status = 'for_certification'
+    $for_certification_query = "SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'for_certification'";
+    $for_certification_result = $conn->query($for_certification_query);
+    $for_certification_count = $for_certification_result ? $for_certification_result->fetch_assoc()['count'] : 0;
+    ?>
+    <h3 class="text-3xl font-bold"><?php echo $for_certification_count; ?></h3>
+    <p>For Certification</p>
+    <a href="modules/records/for_certification.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">Review</a>
+</div>
+          <div class="stats-card-3 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
             <i class="bi bi-heart-pulse-fill text-4xl mb-2"></i>
             <h3 class="text-3xl font-bold"><?php echo $total_submissions; ?></h3>
             <p>Consultations</p>
-            <a href="modules/records/submissions.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">View</a>
+            <a href="modules/records/submissions.php" class="mt-4 bg-white text-orange-500 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">View</a>
           </div>
-          <div class="stats-card-3 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
+          <div class="stats-card-1 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
             <i class="bi bi-clipboard2-check-fill text-4xl mb-2"></i>
             <h3 class="text-3xl font-bold"><?php echo $pending_verifications; ?></h3>
             <p>Pending Verifications</p>
-            <a href="modules/records/verify_submission.php" class="mt-4 bg-white text-orange-500 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">Review Now</a>
+            <a href="modules/records/verify_submission.php" class="mt-4 bg-white text-red-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-red-50 transition">Review Now</a>
           </div>
         </div>
 

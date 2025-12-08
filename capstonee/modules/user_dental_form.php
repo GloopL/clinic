@@ -479,21 +479,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         </div>
 
                         <div class="mb-6">
-                            <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                                <label for="address" class="block font-medium mb-2 text-orange-700">
-                                    <i class="bi bi-geo-alt mr-2"></i>Address
-                                </label>
-                                <textarea class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
-                                          id="address" 
-                                          name="address" 
-                                          rows="3" 
-                                          placeholder="Enter your complete address" 
-                                          required><?php echo isset($patient_data['address']) ? htmlspecialchars($patient_data['address']) : ''; ?></textarea>
-                                <p class="text-xs text-orange-600 mt-2 flex items-center">
-                                    <i class="bi bi-pencil-square mr-1"></i> Please enter your complete address
-                                </p>
-                            </div>
-                        </div>
+    <?php if (isset($patient_data['address']) && !empty($patient_data['address'])): ?>
+        <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+            <label for="address" class="block font-medium mb-2 text-green-700">
+                <i class="bi bi-geo-alt mr-2"></i>Address
+            </label>
+            <textarea class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
+                      id="address" 
+                      name="address" 
+                      rows="3" 
+                      readonly><?php echo htmlspecialchars($patient_data['address']); ?></textarea>
+            <p class="text-xs text-green-600 mt-2 flex items-center">
+                <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+            </p>
+        </div>
+    <?php else: ?>
+        <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+            <label for="address" class="block font-medium mb-2 text-orange-700">
+                <i class="bi bi-geo-alt mr-2"></i>Address
+            </label>
+            <textarea class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                      id="address" 
+                      name="address" 
+                      rows="3" 
+                      placeholder="Enter your complete address" 
+                      required></textarea>
+            <p class="text-xs text-orange-600 mt-2 flex items-center">
+                <i class="bi bi-pencil-square mr-1"></i> Please enter your complete address
+            </p>
+        </div>
+    <?php endif; ?>
+</div>
 
                         <!-- Information Legend -->
                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">

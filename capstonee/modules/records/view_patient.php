@@ -41,7 +41,7 @@ if ($result->num_rows === 0) {
 }
 $patient = $result->fetch_assoc();
 
-// Fetch records
+// Fetch ONLY certified records
 $stmt = $conn->prepare("
     SELECT mr.*, 
            CASE 
@@ -49,10 +49,14 @@ $stmt = $conn->prepare("
                WHEN mr.record_type = 'dental_exam' THEN 'Dental Examination'
                WHEN mr.record_type = 'medical_exam' THEN 'Medical Examination'
                ELSE mr.record_type
-           END AS record_type_name
+           END AS record_type_name,
+           mr.verification_status,
+           mr.certified_date,
+           mr.certified_by
     FROM medical_records mr
-    WHERE mr.patient_id = ?
-    ORDER BY mr.examination_date DESC
+    WHERE mr.patient_id = ? 
+    AND mr.verification_status = 'certified'
+    ORDER BY mr.certified_date DESC
 ");
 $stmt->bind_param("i", $patient_id);
 $stmt->execute();
@@ -156,9 +160,7 @@ $age = $now->diff($dob)->y;
           <i class="bi bi-file-medical"></i> Medical Records
         </h2>
         <div class="relative">
-          <button class="red-orange-gradient-button text-white px-4 py-2 rounded-lg shadow hover:shadow-lg flex items-center gap-2 transition-all" id="newRecordBtn">
-            <i class="bi bi-plus-circle"></i> New Record
-          </button>
+          
           <ul class="hidden absolute right-0 mt-2 w-56 bg-white border border-orange-200 rounded-lg shadow-lg" id="recordDropdown">
             <li><a href="../forms/history_form.php?patient_id=<?php echo $patient_id; ?>" class="block px-4 py-2 hover:bg-orange-50 text-orange-700 transition-all">Medical History Form</a></li>
             <li><a href="../forms/dental_form.php?patient_id=<?php echo $patient_id; ?>" class="block px-4 py-2 hover:bg-orange-50 text-orange-700 transition-all">Dental Examination</a></li>
@@ -170,31 +172,70 @@ $age = $now->diff($dob)->y;
       <?php if (count($records) > 0): ?>
         <div class="overflow-x-auto">
           <table class="min-w-full border border-orange-200 rounded-lg overflow-hidden">
-            <thead class="red-orange-table-header text-white">
-              <tr>
-                <th class="px-4 py-3 text-left">Date</th>
-                <th class="px-4 py-3 text-left">Record Type</th>
-                <th class="px-4 py-3 text-left">Physician</th>
-                <th class="px-4 py-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-orange-100">
-              <?php foreach ($records as $record): ?>
-                <tr class="red-orange-table-row hover:shadow-lg transition-all">
-                  <td class="px-4 py-3 text-orange-900"><?php echo $record['examination_date']; ?></td>
-                  <td class="px-4 py-3 text-orange-900"><?php echo $record['record_type_name']; ?></td>
-                  <td class="px-4 py-3 text-orange-900"><?php echo $record['physician_name']; ?></td>
-                  <td class="px-4 py-3">
-                  <a href="../records/view_record.php?id=<?php echo $record['id']; ?>&type=<?php echo $record['record_type']; ?>" 
-                class="text-orange-600 hover:text-orange-800 mr-3 transition-all" 
-                title="View Record">
+    <thead class="red-orange-table-header text-white">
+        <tr>
+            <th class="px-4 py-3 text-left">Date</th>
+            <th class="px-4 py-3 text-left">Record Type</th>
+            <th class="px-4 py-3 text-left">Physician</th>
+            <th class="px-4 py-3 text-left">Certification Status</th> <!-- NEW COLUMN -->
+            <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+    </thead>
+    <tbody class="divide-y divide-orange-100">
+            <?php foreach ($records as $record): ?>
+    <tr class="red-orange-table-row hover:shadow-lg transition-all">
+        <td class="px-4 py-3 text-orange-900"><?php echo $record['examination_date']; ?></td>
+        <td class="px-4 py-3 text-orange-900"><?php echo $record['record_type_name']; ?></td>
+        <td class="px-4 py-3 text-orange-900"><?php echo $record['physician_name']; ?></td>
+        <td class="px-4 py-3">
+            <?php 
+            if (!empty($record['verification_status'])) {
+                $status = strtolower($record['verification_status']);
+                $badge_class = '';
+                $status_text = '';
+                
+                switch($status) {
+                    case 'pending':
+                        $badge_class = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                        $status_text = 'Pending';
+                        break;
+                    case 'for_certification':
+                        $badge_class = 'bg-blue-100 text-blue-800 border-blue-200';
+                        $status_text = 'For Certification';
+                        break;
+                    case 'certified':
+                        $badge_class = 'bg-green-100 text-green-800 border-green-200';
+                        $status_text = 'Certified';
+                        break;
+                    case 'rejected':
+                        $badge_class = 'bg-red-100 text-red-800 border-red-200';
+                        $status_text = 'Rejected';
+                        break;
+                    default:
+                        $badge_class = 'bg-gray-100 text-gray-800 border-gray-200';
+                        $status_text = ucfirst($status);
+                }
+                
+                echo '<span class="px-3 py-1 text-xs font-semibold rounded-full border ' . $badge_class . '">' . $status_text . '</span>';
+                
+                // Show certified date if available
+                if ($status === 'certified' && !empty($record['certified_date'])) {
+                    echo '<br><small class="text-gray-600 text-xs mt-1 block">' . date('M d, Y', strtotime($record['certified_date'])) . '</small>';
+                }
+            } else {
+                echo '<span class="px-3 py-1 text-xs font-semibold rounded-full border bg-gray-100 text-gray-800 border-gray-200">Not Submitted</span>';
+            }
+            ?>
+        </td>
+        <td class="px-4 py-3">
+            <a href="../records/view_record.php?id=<?php echo $record['id']; ?>&type=<?php echo $record['record_type']; ?>" 
+               class="text-orange-600 hover:text-orange-800 mr-3 transition-all" 
+               title="View Record">
                 <i class="bi bi-eye"></i>
-</a>
-
-            
-                  </td>
-                </tr>
-              <?php endforeach; ?>
+            </a>
+        </td>
+    </tr>
+<?php endforeach; ?>
             </tbody>
           </table>
         </div>
