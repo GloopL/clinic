@@ -273,6 +273,44 @@ function generateDefaultAvatar($username) {
     
     return $initials;
 }
+
+// Get diagnosis count for display
+$diagnosis_count = 0;
+if ($patient_info && isset($patient_info['id'])) {
+    $count_query = $conn->prepare("SELECT COUNT(*) as count FROM medical_diagnoses WHERE patient_id = ?");
+    $count_query->bind_param("i", $patient_info['id']);
+    $count_query->execute();
+    $count_result = $count_query->get_result();
+    if ($count_result->num_rows > 0) {
+        $count_row = $count_result->fetch_assoc();
+        $diagnosis_count = $count_row['count'];
+    }
+    $count_query->close();
+}
+
+// Get recent form submissions for the dashboard
+$patient_query = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
+$patient_query->bind_param("s", $_SESSION['username']);
+$patient_query->execute();
+$patient_result = $patient_query->get_result();
+$patient_id = null;
+if ($patient_result->num_rows > 0) {
+    $patient_row = $patient_result->fetch_assoc();
+    $patient_id = $patient_row['id'];
+}
+$patient_query->close();
+
+$user_submissions_query = "
+    SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status, mr.created_at
+    FROM medical_records mr
+    WHERE mr.patient_id = ?
+    ORDER BY mr.created_at DESC
+    LIMIT 5
+";
+$stmt = $conn->prepare($user_submissions_query);
+$stmt->bind_param("i", $patient_id);
+$stmt->execute();
+$user_submissions_result = $stmt->get_result();
 ?>
 
 <!DOCTYPE html>
@@ -286,90 +324,93 @@ function generateDefaultAvatar($username) {
      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        /* Custom red to orange gradient theme */
-        .red-orange-gradient {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        /* Custom maroon theme (#800000) */
+        :root {
+            --maroon-primary: #800000;
+            --maroon-dark: #660000;
+            --maroon-light: #a00000;
+            --maroon-bg: #fff5f5;
         }
         
-        .red-orange-gradient-light {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5, #fed7aa);
+        .maroon-gradient {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-gradient-card {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        .maroon-gradient-light {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
         
-        .red-orange-gradient-card-light {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
+        .maroon-gradient-card {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-gradient-button {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+        .maroon-gradient-button {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-gradient-button:hover {
-            background: linear-gradient(135deg, #b91c1c, #c2410c);
+        .maroon-gradient-button:hover {
+            background: linear-gradient(135deg, var(--maroon-dark), var(--maroon-primary));
         }
         
-        .red-orange-gradient-alert {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
-            border-left-color: #ea580c;
+        .maroon-gradient-alert {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+            border-left-color: var(--maroon-primary);
         }
         
-        .red-orange-table-header {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+        .maroon-table-header {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-table-row {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
+        .maroon-table-row {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
         
-        .red-orange-table-row:hover {
-            background: linear-gradient(135deg, #fee2e2, #fed7aa);
+        .maroon-table-row:hover {
+            background: linear-gradient(135deg, #ffe5e5, #ffcccc);
         }
         
-        .red-orange-badge {
-            background: linear-gradient(135deg, #fecaca, #fed7aa);
-            color: #7c2d12;
+        .maroon-badge {
+            background: linear-gradient(135deg, #ffcccc, #ffb3b3);
+            color: #800000;
         }
         
-        .red-orange-badge-verified {
+        .maroon-badge-verified {
             background: linear-gradient(135deg, #dcfce7, #bbf7d0);
             color: #166534;
         }
         
-        .red-orange-badge-pending {
+        .maroon-badge-pending {
             background: linear-gradient(135deg, #fef3c7, #fde68a);
             color: #92400e;
         }
         
-        .red-orange-badge-rejected {
+        .maroon-badge-rejected {
             background: linear-gradient(135deg, #fee2e2, #fecaca);
             color: #991b1b;
         }
         
         .stats-card-1 {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+            background: linear-gradient(135deg, var(--maroon-primary), #990000);
         }
         
         .stats-card-2 {
-            background: linear-gradient(135deg, #ea580c, #f97316);
+            background: linear-gradient(135deg, #990000, #b30000);
         }
         
         .stats-card-3 {
-            background: linear-gradient(135deg, #f97316, #fb923c);
+            background: linear-gradient(135deg, #b30000, #cc0000);
         }
         
         .form-card-history {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+            background: linear-gradient(135deg, var(--maroon-primary), #990000);
         }
         
         .form-card-dental {
-            background: linear-gradient(135deg, #ea580c, #f97316);
+            background: linear-gradient(135deg, #990000, #b30000);
         }
         
         .form-card-medical {
-            background: linear-gradient(135deg, #f97316, #fb923c);
+            background: linear-gradient(135deg, #b30000, #cc0000);
         }
 
         /* Dental Chart Styles */
@@ -398,7 +439,7 @@ function generateDefaultAvatar($username) {
         }
         
         .tooth.selected {
-            box-shadow: 0 0 0 2px #3b82f6;
+            box-shadow: 0 0 0 2px var(--maroon-primary);
         }
         
         .tooth-label {
@@ -458,311 +499,634 @@ function generateDefaultAvatar($username) {
             background: linear-gradient(135deg, #9ca3af, #6b7280, #4b5563);
             transform: none;
         }
+
+        /* Tab Navigation Styles */
+        .tab-nav {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 280px;
+            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+            overflow-y: auto;
+            z-index: 40;
+            box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tab-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: #f9fafb;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
+        }
+        
+        .tab-link {
+            display: flex;
+            align-items: center;
+            padding: 14px 20px;
+            color: #9ca3af;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .tab-link:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            border-left-color: var(--maroon-primary);
+        }
+        
+        .tab-link.active {
+            background: rgba(128, 0, 0, 0.1);
+            color: #ffffff;
+            border-left-color: var(--maroon-primary);
+        }
+        
+        .tab-link i {
+            width: 24px;
+            margin-right: 12px;
+            font-size: 1.2rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+        }
+
+        @media (max-width: 1024px) {
+            .tab-nav {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                width: 260px;
+            }
+            
+            .tab-nav.active {
+                transform: translateX(0);
+            }
+            
+            .tab-content {
+                margin-left: 0;
+            }
+            
+            .mobile-menu-btn {
+                display: flex;
+            }
+            
+            .mobile-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 30;
+            }
+            
+            .mobile-overlay.active {
+                display: block;
+            }
+        }
+
+        /* Footer fix - always at bottom */
+        .page-footer {
+            margin-top: auto;
+            width: 100%;
+        }
+        
+        /* Text colors for maroon theme */
+        .text-maroon {
+            color: var(--maroon-primary);
+        }
+        
+        .text-maroon-light {
+            color: var(--maroon-light);
+        }
+        
+        .border-maroon {
+            border-color: var(--maroon-primary);
+        }
+        
+        .bg-maroon-light {
+            background-color: #fff5f5;
+        }
     </style>
 </head>
-<body class="bg-gradient-to-br from-orange-50 to-red-50 min-h-screen flex flex-col">
+<body class="bg-maroon-light">
 
-    <header class="red-orange-gradient text-white shadow-md sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-            <div class="flex items-center gap-3">
-                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-12 h-12 rounded-full object-cover border-4 border-white bg-white">
-                <h1 class="text-lg font-bold">BSU Clinic Record Management System</h1>
-            </div>
-            <nav class="flex items-center gap-6">
-                <a href="user_dashboard.php" class="hover:text-yellow-200 flex items-center gap-1 font-semibold">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </a>
-                <a href="my_diagnoses.php" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-clipboard2-heart-fill"></i> My Diagnoses
-                </a>
-                <a href="update_user_profile.php" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-person-circle"></i> Profile
-                </a>
-                <a href="#" onclick="openLogoutModal(event)" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </a>
-            </nav>
-        </div>
-    </header>
+    <!-- Mobile Menu Overlay -->
+    <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
 
-    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
-        <!-- Welcome Section -->
-        <div class="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
-            <div class="red-orange-gradient px-8 py-6">
-                <div class="flex items-center gap-4">
-                    <!-- Default Profile Avatar -->
-                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-red-800 text-xl font-bold border-4 border-white shadow-lg">
-                        <?php echo generateDefaultAvatar($_SESSION['username']); ?>
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="text-xl font-bold text-white mb-1">Welcome, <?php echo htmlspecialchars($display_name); ?></h3>
-                        <p class="text-white text-sm">Student Profile</p>
-                    </div>
-                    <div class="text-right text-white">
-                        <p class="text-sm">Today is</p>
-                        <p class="font-semibold"><?php echo date('l, F j, Y'); ?></p>
-                        <p class="text-sm" id="currentTime"><?php echo date('g:i A'); ?></p>
-                    </div>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav" id="tabNav">
+        <!-- User Profile Header -->
+        <div class="p-6 border-b border-gray-800">
+            <div class="flex items-center gap-4 mb-4">
+                <div class="w-14 h-14 maroon-gradient rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                    <?php echo generateDefaultAvatar($display_name); ?>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white text-lg"><?php echo htmlspecialchars($display_name); ?></h3>
+                    <p class="text-gray-400 text-sm">Student</p>
                 </div>
             </div>
-            <div class="px-8 py-4 bg-gray-50">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <span class="text-gray-700 font-semibold">SR Code:</span>
-                        <span class="text-gray-900"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
-                    </div>
-                    <div>
-                        <span class="text-gray-700 font-semibold">Role:</span>
-                        <span class="text-gray-900">Student</span>
-                    </div>
-                    <div>
-                        <span class="text-gray-700 font-semibold">Member Since:</span>
-                        <span class="text-gray-900"><?php echo date('M j, Y', strtotime($user_profile['created_at'])); ?></span>
-                    </div>
+            <div class="space-y-2">
+                <div class="flex justify-between text-gray-300 text-sm">
+                    <span>SR Code:</span>
+                    <span class="font-medium"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
+                </div>
+                <div class="flex justify-between text-gray-300 text-sm">
+                    <span>Role:</span>
+                    <span class="font-medium">Student</span>
                 </div>
             </div>
         </div>
 
-        <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Left Column: Forms -->
-            <div class="lg:col-span-2">
+       <!-- Navigation Tabs -->
+<div class="py-4">
+    <a href="#dashboard" class="tab-link" data-tab="dashboard"> 
+        <i class="bi bi-speedometer2"></i>
+        <span>Dashboard</span>
+    </a>
+    <a href="#clinic-forms" class="tab-link" data-tab="clinic-forms">
+        <i class="bi bi-clipboard2-pulse-fill"></i>
+        <span>Clinic Forms</span>
+    </a>
+    <a href="#medical-diagnoses" class="tab-link" data-tab="medical-diagnoses">
+        <i class="bi bi-clipboard2-heart-fill"></i>
+        <span>Medical Diagnoses</span>
+        <?php if ($diagnosis_count > 0): ?>
+            <span class="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full"><?php echo $diagnosis_count; ?></span>
+        <?php endif; ?>
+    </a>
+    <a href="#update-profile" class="tab-link" data-tab="update-profile">
+        <i class="bi bi-person-circle"></i>
+        <span>Update Profile</span>
+    </a>
+</div>
+
+        <!-- Recent Activities Sidebar Section -->
+        <div class="px-6 py-4 border-t border-gray-800">
+            <h4 class="text-gray-400 text-sm font-semibold mb-3 uppercase tracking-wider">Recent Activities</h4>
+            <div class="space-y-3">
+                <?php if($recent_activities && $recent_activities->num_rows > 0): ?>
+                    <?php while($activity = $recent_activities->fetch_assoc()): ?>
+                        <div class="flex items-start gap-3">
+                            <div class="<?php echo getActivityBg($activity['activity_type']); ?> p-2 rounded-full mt-1">
+                                <i class="bi <?php echo getActivityIcon($activity['activity_type']); ?> text-sm"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-gray-300 text-sm font-medium"><?php echo htmlspecialchars($activity['activity_description']); ?></p>
+                                <p class="text-gray-500 text-xs"><?php echo date('M j, g:i A', strtotime($activity['created_at'])); ?></p>
+                            </div>
+                        </div>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <p class="text-gray-500 text-sm">No recent activities</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Logout Button -->
+        <div class="p-6 border-t border-gray-800 mt-auto">
+            <a href="#" onclick="openLogoutModal(event)" class="flex items-center justify-center maroon-gradient-button text-white py-3 rounded-lg font-medium hover:shadow-lg transition-all">
+                <i class="bi bi-box-arrow-right mr-2"></i> Logout
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="tab-content">
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-10">
+            <div class="flex items-center justify-between px-6 py-4">
+                <!-- Mobile Menu Button -->
+                <button id="mobileMenuBtn" class="mobile-menu-btn text-gray-700 hover:text-maroon">
+                    <i class="bi bi-list text-2xl"></i>
+                </button>
+                
+                <!-- System Logo and Title -->
+                <div class="flex items-center gap-3">
+                    <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-10 h-10 rounded-full object-cover border-2 border-maroon bg-white">
+                    <h1 class="text-lg font-bold text-gray-800 hidden md:block">BSU Clinic Record Management System</h1>
+                </div>
+                
+                <!-- Current Date/Time -->
+                <div class="text-right">
+                    <p class="text-sm text-gray-600">Today is</p>
+                    <p class="font-semibold text-gray-800"><?php echo date('l, F j, Y'); ?></p>
+                    <p class="text-sm text-gray-600" id="currentTime"><?php echo date('g:i A'); ?></p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab Contents -->
+        <div class="main-content p-6">
+            <!-- Dashboard Tab (Default Active) -->
+            <div id="dashboard-content" class="tab-panel">
+                <!-- Welcome Card -->
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6 border-l-4 border-maroon">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome, <?php echo htmlspecialchars($display_name); ?>!</h2>
+                            <p class="text-gray-600">Here's your clinic dashboard. You can submit forms, view diagnoses, and manage your profile.</p>
+                        </div>
+                        <div class="hidden md:block">
+                            <div class="w-20 h-20 maroon-gradient rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                                <?php echo generateDefaultAvatar($display_name); ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- Form Submissions Card -->
+                    <div class="stats-card-1 text-white rounded-xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm opacity-90">Form Submissions</p>
+                                <p class="text-3xl font-bold mt-2"><?php echo $user_submissions_result ? $user_submissions_result->num_rows : 0; ?></p>
+                            </div>
+                            <i class="bi bi-clipboard2-check text-4xl opacity-80"></i>
+                        </div>
+                        <div class="mt-4">
+                            <a href="#clinic-forms" onclick="switchTab('clinic-forms')" class="text-white text-sm font-medium hover:underline flex items-center">
+                                View Forms <i class="bi bi-arrow-right ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Medical Diagnoses Card -->
+                    <div class="stats-card-2 text-white rounded-xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm opacity-90">Medical Diagnoses</p>
+                                <p class="text-3xl font-bold mt-2"><?php echo $diagnosis_count; ?></p>
+                            </div>
+                            <i class="bi bi-clipboard2-heart text-4xl opacity-80"></i>
+                        </div>
+                        <div class="mt-4">
+                            <a href="#medical-diagnoses" onclick="switchTab('medical-diagnoses')" class="text-white text-sm font-medium hover:underline flex items-center">
+                                View Diagnoses <i class="bi bi-arrow-right ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Profile Status Card -->
+                    <div class="stats-card-3 text-white rounded-xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm opacity-90">Profile Status</p>
+                                <p class="text-3xl font-bold mt-2">Complete</p>
+                            </div>
+                            <i class="bi bi-person-check text-4xl opacity-80"></i>
+                        </div>
+                        <div class="mt-4">
+                            <a href="#update-profile" onclick="switchTab('update-profile')" class="text-white text-sm font-medium hover:underline flex items-center">
+                                Update Profile <i class="bi bi-arrow-right ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Recent Form Submissions -->
                 <div class="bg-white rounded-xl shadow-md p-6 mb-8">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-semibold flex items-center gap-2">
-                            <i class="bi bi-clipboard2-pulse-fill text-orange-600"></i> Recent Form Submissions
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                            <i class="bi bi-clock-history text-maroon"></i> Recent Form Submissions
                         </h3>
+                        <a href="#clinic-forms" onclick="switchTab('clinic-forms')" class="text-maroon hover:text-maroon-dark text-sm font-medium flex items-center">
+                            View All <i class="bi bi-arrow-right ml-1"></i>
+                        </a>
                     </div>
-                    <?php
-                    // Get patient ID from patients table using student_id
-                    $patient_query = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
-                    $patient_query->bind_param("s", $_SESSION['username']);
-                    $patient_query->execute();
-                    $patient_result = $patient_query->get_result();
-                    $patient_id = null;
-                    if ($patient_result->num_rows > 0) {
-                        $patient_row = $patient_result->fetch_assoc();
-                        $patient_id = $patient_row['id'];
-                    }
-                    $patient_query->close();
-
-                    $user_submissions_query = "
-                        SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status, mr.created_at
-                        FROM medical_records mr
-                        WHERE mr.patient_id = ?
-                        ORDER BY mr.created_at DESC
-                        LIMIT 5
-                    ";
-                    $stmt = $conn->prepare($user_submissions_query);
-                    $stmt->bind_param("i", $patient_id);
-                    $stmt->execute();
-                    $user_submissions_result = $stmt->get_result();
-                    ?>
+                    
                     <?php if ($user_submissions_result && $user_submissions_result->num_rows > 0): ?>
-                        <div class="space-y-3">
+                        <div class="space-y-4">
                             <?php while ($submission = $user_submissions_result->fetch_assoc()): ?>
-                                <div class="red-orange-table-row p-3 rounded-lg hover:shadow transition-all duration-200">
+                                <div class="bg-gray-50 hover:bg-gray-100 p-4 rounded-lg border border-gray-200 transition-all duration-200">
                                     <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="font-medium"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $submission['record_type']))); ?></p>
-                                            <p class="text-sm text-gray-600">Submitted: <?php echo date('M d, Y', strtotime($submission['created_at'])); ?></p>
+                                        <div class="flex items-center gap-4">
+                                            <div class="<?php echo getActivityBg('form_submission'); ?> p-3 rounded-full">
+                                                <i class="bi <?php echo getActivityIcon('form_submission'); ?>"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-800"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $submission['record_type']))); ?></p>
+                                                <p class="text-sm text-gray-600">Submitted: <?php echo date('M d, Y', strtotime($submission['created_at'])); ?></p>
+                                            </div>
                                         </div>
                                         <div class="text-right">
-                                            <span class="px-2 py-1 rounded-full text-xs font-semibold <?php
-                                                echo $submission['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
-                                                    ($submission['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' :
-                                                    'red-orange-badge-pending');
+                                            <span class="px-3 py-1 rounded-full text-xs font-semibold <?php
+                                                echo $submission['verification_status'] === 'verified' ? 'maroon-badge-verified' :
+                                                    ($submission['verification_status'] === 'rejected' ? 'maroon-badge-rejected' :
+                                                    'maroon-badge-pending');
                                             ?>">
                                                 <?php echo strtoupper($submission['verification_status']); ?>
                                             </span>
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                Exam Date: <?php echo $submission['examination_date'] ? date('M d, Y', strtotime($submission['examination_date'])) : 'N/A'; ?>
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
                             <?php endwhile; ?>
                         </div>
                     <?php else: ?>
-                        <div class="text-center py-6">
+                        <div class="text-center py-8">
                             <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
                                 <i class="bi bi-clipboard2-pulse text-gray-400 text-2xl"></i>
                             </div>
-                            <p class="text-gray-500 mb-2">No form submissions found</p>
-                            <p class="text-gray-400 text-sm">Your recent submissions will appear here</p>
+                            <p class="text-gray-500 mb-2">No form submissions yet</p>
+                            <p class="text-gray-400 text-sm">Your submitted forms will appear here</p>
+                            <a href="#clinic-forms" onclick="switchTab('clinic-forms')" class="mt-4 inline-block maroon-gradient-button text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Submit Your First Form
+                            </a>
                         </div>
                     <?php endif; ?>
                 </div>
+            </div>
 
-                <!-- Medical Diagnoses Quick Access Card -->
-                <?php
-                // Get diagnosis count for display
-                $diagnosis_count = 0;
-                if ($patient_info && isset($patient_info['id'])) {
-                    $count_query = $conn->prepare("SELECT COUNT(*) as count FROM medical_diagnoses WHERE patient_id = ?");
-                    $count_query->bind_param("i", $patient_info['id']);
-                    $count_query->execute();
-                    $count_result = $count_query->get_result();
-                    if ($count_result->num_rows > 0) {
-                        $count_row = $count_result->fetch_assoc();
-                        $diagnosis_count = $count_row['count'];
-                    }
-                    $count_query->close();
-                }
-                ?>
-                <div class="bg-white rounded-xl shadow-md p-6 mb-8 border-l-4 border-red-500">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="bg-red-100 p-4 rounded-full">
-                                <i class="bi bi-clipboard2-heart-fill text-red-600 text-3xl"></i>
+            <!-- Clinic Forms Tab -->
+            <div id="clinic-forms-content" class="tab-panel hidden">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                        <i class="bi bi-clipboard2-pulse-fill text-maroon"></i> Clinic Forms
+                    </h2>
+                    <p class="text-gray-600 mb-6">Fill out your medical forms for clinic services</p>
+
+                    <!-- Forms Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <!-- Medical History Form -->
+                        <button onclick="openFormModal('history')" class="block form-card-history text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02] border-b-4 border-yellow-500 relative">
+                            <div class="flex items-center justify-center mb-4">
+                                <i class="bi bi-clipboard2-pulse-fill text-4xl"></i>
                             </div>
-                            <div>
-                                <h3 class="text-xl font-semibold text-gray-800 mb-1">Medical Diagnoses & Findings</h3>
-                                <p class="text-gray-600 text-sm">
-                                    <?php if ($diagnosis_count > 0): ?>
-                                        You have <?php echo $diagnosis_count; ?> diagnosis(es) from healthcare providers
-                                    <?php else: ?>
-                                        View your medical diagnoses and findings from doctors, dentists, and nurses
-                                    <?php endif; ?>
-                                </p>
+                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2">Medical History Form for Athlete</h3>
+                            <p class="text-sm opacity-90 text-center">Update your medical history</p>
+                            <?php if (isset($submitted_forms['history_form'])): ?>
+                                <div class="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                                    SUBMITTED
+                                </div>
+                            <?php endif; ?>
+                        </button>
+
+                        <!-- Dental Examination Form -->
+                        <button onclick="openFormModal('dental')" class="block form-card-dental text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02] border-b-4 border-yellow-500 relative">
+                            <div class="flex items-center justify-center mb-4">
+                                <i class="fas fa-tooth text-4xl"></i>
                             </div>
-                        </div>
-                        <a href="my_diagnoses.php" class="red-orange-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
-                            <i class="bi bi-arrow-right-circle"></i> View All Diagnoses
-                        </a>
+                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2">Dental Examination</h3>
+                            <p class="text-sm opacity-90 text-center">Complete dental checkup form</p>
+                            <?php if (isset($submitted_forms['dental_exam'])): ?>
+                                <div class="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                                    SUBMITTED
+                                </div>
+                            <?php endif; ?>
+                        </button>
+
+                        <!-- Medical Examination Form -->
+                        <button onclick="openFormModal('medical')" class="block form-card-medical text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02] border-b-4 border-yellow-500 relative">
+                            <div class="flex items-center justify-center mb-4">
+                                <i class="bi bi-heart-pulse text-4xl"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2">Pre-Employment/OJT Medical Examination</h3>
+                            <p class="text-sm opacity-90 text-center">Complete medical checkup form</p>
+                            <?php if (isset($submitted_forms['medical_exam'])): ?>
+                                <div class="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                                    SUBMITTED
+                                </div>
+                            <?php endif; ?>
+                        </button>
+                    </div>
+
+                    <!-- Form Submission Guidelines -->
+                    <div class="bg-maroon-light border border-maroon rounded-xl p-6">
+                        <h3 class="text-lg font-semibold text-maroon mb-3 flex items-center gap-2">
+                            <i class="bi bi-info-circle-fill"></i> Form Submission Guidelines
+                        </h3>
+                        <ul class="space-y-2 text-gray-700">
+                            <li class="flex items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                <span>Fill out all required fields marked with asterisk (*)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                <span>Review your information before submission</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                <span>Forms will be verified by clinic staff within 3-5 working days</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                <span>You can track submission status in the Dashboard</span>
+                            </li>
+                        </ul>
                     </div>
                 </div>
+            </div>
 
-                <!-- Clinic Forms Section -->
-                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div class="px-6 pt-6 pb-4 red-orange-table-header text-white">
-                        <h2 class="text-xl font-bold">Clinic Forms</h2>
-                        <p class="text-white text-sm opacity-90">Fill out your medical forms</p>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <!-- Student Fillable Form -->
-                            <button onclick="openFormModal('history')" class="block form-card-history text-white rounded-xl p-5 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02] border-b-4 border-yellow-500 relative">
-                                <div class="flex items-center justify-center mb-3">
-                                    <i class="bi bi-clipboard2-pulse-fill text-3xl"></i>
+            <!-- Medical Diagnoses Tab -->
+            <div id="medical-diagnoses-content" class="tab-panel hidden">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                        <i class="bi bi-clipboard2-heart-fill text-maroon"></i> Medical Diagnoses
+                    </h2>
+                    <p class="text-gray-600 mb-6">View your medical diagnoses and findings from healthcare providers</p>
+
+                    <?php if ($diagnosis_count > 0): ?>
+                        <!-- Diagnoses List -->
+                        <div class="space-y-4">
+                            <!-- This would be populated with actual diagnoses from the database -->
+                            <div class="bg-gray-50 hover:bg-gray-100 p-5 rounded-lg border border-gray-200 transition-all duration-200">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-start gap-4">
+                                        <div class="bg-red-100 p-3 rounded-full">
+                                            <i class="bi bi-heart-pulse-fill text-red-600"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-gray-800 mb-1">General Checkup Findings</h4>
+                                            <p class="text-gray-600 text-sm mb-2">From: Dr. Maria Santos - General Physician</p>
+                                            <p class="text-gray-700">Patient is in good health. Mild vitamin D deficiency noted. Recommended dietary supplements.</p>
+                                            <p class="text-xs text-gray-500 mt-2">Diagnosed: October 15, 2024</p>
+                                        </div>
+                                    </div>
+                                    <span class="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-semibold">
+                                        COMPLETED
+                                    </span>
                                 </div>
-                                <h3 class="text-lg font-semibold tracking-tight text-center">Medical History Form for Athlete</h3>
-                                <p class="text-sm mt-1 opacity-90 text-center">Update your medical history</p>
-                                <?php if (isset($submitted_forms['history_form'])): ?>
-                                    <div class="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
-                                        SUBMITTED
+                            </div>
+
+                            <div class="bg-gray-50 hover:bg-gray-100 p-5 rounded-lg border border-gray-200 transition-all duration-200">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-start gap-4">
+                                        <div class="bg-blue-100 p-3 rounded-full">
+                                            <i class="bi bi-tooth text-blue-600"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-gray-800 mb-1">Dental Examination Results</h4>
+                                            <p class="text-gray-600 text-sm mb-2">From: Dr. Juan Dela Cruz - Dentist</p>
+                                            <p class="text-gray-700">Two cavities detected (teeth #3 and #14). Recommended dental filling appointments.</p>
+                                            <p class="text-xs text-gray-500 mt-2">Diagnosed: September 28, 2024</p>
+                                        </div>
+                                    </div>
+                                    <span class="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full font-semibold">
+                                        PENDING TREATMENT
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- View All Button -->
+                        <div class="mt-6 text-center">
+                            <a href="my_diagnoses.php" class="inline-flex items-center gap-2 maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
+                                <i class="bi bi-arrow-right-circle"></i> View All Diagnoses
+                            </a>
+                        </div>
+                    <?php else: ?>
+                        <!-- No Diagnoses State -->
+                        <div class="text-center py-12">
+                            <div class="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="bi bi-clipboard2-heart text-gray-400 text-3xl"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-700 mb-2">No diagnoses found</h3>
+                            <p class="text-gray-500 mb-6">You haven't received any medical diagnoses yet.</p>
+                            <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                                <a href="#clinic-forms" onclick="switchTab('clinic-forms')" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
+                                    <i class="bi bi-clipboard2-plus"></i> Submit Medical Forms
+                                </a>
+                                <a href="#" class="bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all">
+                                    <i class="bi bi-question-circle"></i> Learn More
+                                </a>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Update Profile Tab -->
+            <div id="update-profile-content" class="tab-panel hidden">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                        <i class="bi bi-person-circle text-purple-600"></i> Update Profile
+                    </h2>
+
+                        <!-- Success Message Container (initially hidden) -->
+                    <div id="profileSuccessMessage" class="hidden bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6">
+                        <div class="flex items-center">
+                            <i class="bi bi-check-circle mr-2"></i>
+                            <span id="successMessageText"></span>
+                        </div>
+                    </div>
+
+                    <p class="text-gray-600 mb-6">Manage your personal information and account settings</p>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- Profile Summary -->
+                        <div class="lg:col-span-2">
+                            <div class="bg-gray-50 rounded-xl p-6 mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Personal Information</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                        <p class="text-gray-900 font-medium"><?php echo htmlspecialchars($display_name); ?></p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">SR Code</label>
+                                        <p class="text-gray-900 font-medium"><?php echo htmlspecialchars($_SESSION['username']); ?></p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                        <p class="text-gray-900 font-medium"><?php echo htmlspecialchars($user_profile['email'] ?? 'Not set'); ?></p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Member Since</label>
+                                        <p class="text-gray-900 font-medium"><?php echo date('M j, Y', strtotime($user_profile['created_at'])); ?></p>
+                                    </div>
+                                </div>
+
+                                <!-- Patient Information -->
+                                <?php if ($patient_info): ?>
+                                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Patient Information</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                                            <p class="text-gray-900"><?php echo htmlspecialchars($patient_info['date_of_birth'] ?? 'Not set'); ?></p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                                            <p class="text-gray-900"><?php echo htmlspecialchars($patient_info['sex'] ?? 'Not set'); ?></p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Program/Course</label>
+                                            <p class="text-gray-900"><?php echo htmlspecialchars($patient_info['program'] ?? 'Not set'); ?></p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Year Level</label>
+                                            <p class="text-gray-900"><?php echo htmlspecialchars($patient_info['year_level'] ?? 'Not set'); ?></p>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
-                            </button>
+                            </div>
 
-                            <!-- Dental Examination Form - Now clickable but with staff-only fields inside -->
-                         <button onclick="openFormModal('dental')" class="block form-card-dental text-white rounded-xl p-5 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02] border-b-4 border-yellow-500 relative">
-    <div class="flex items-center justify-center mb-3">
-        <i class="fas fa-tooth text-3xl"></i>
-    </div>
-    <h3 class="text-lg font-semibold tracking-tight text-center">Dental Examination</h3>
-    <p class="text-sm mt-1 opacity-90 text-center">Complete dental checkup form</p>
-    <?php if (isset($submitted_forms['dental_exam'])): ?>
-        <div class="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
-            SUBMITTED
-        </div>
-    <?php endif; ?>
+                            <!-- Action Buttons -->
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <button onclick="openProfileModal()" class="flex-1 maroon-gradient-button text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all text-center">
+                                        <i class="bi bi-pencil-square mr-2"></i> Edit Profile Information
+                                    </button>
+                                <button onclick="openPasswordModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all text-center">
+    <i class="bi bi-key-fill mr-2"></i> Change Password
 </button>
+                            </div>
+                        </div>
 
-                            <!-- Medical Examination Form - Now clickable but with staff-only fields inside -->
-                            <button onclick="openFormModal('medical')" class="block form-card-medical text-white rounded-xl p-5 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02] border-b-4 border-yellow-500 relative">
-                                <div class="flex items-center justify-center mb-3">
-                                    <i class="bi bi-heart-pulse text-3xl"></i>
+                        <!-- Profile Avatar -->
+                        <div>
+                            <div class="bg-gray-50 rounded-xl p-6 text-center">
+                                <div class="w-32 h-32 maroon-gradient rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-lg mx-auto mb-4">
+                                    <?php echo generateDefaultAvatar($display_name); ?>
                                 </div>
-                                <h3 class="text-lg font-semibold tracking-tight text-center">Pre-Employment/OJT Medical Examination</h3>
-                                <p class="text-sm mt-1 opacity-90 text-center">Complete medical checkup form</p>
-                                <?php if (isset($submitted_forms['medical_exam'])): ?>
-                                    <div class="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
-                                        SUBMITTED
+                                <h3 class="font-bold text-lg text-gray-800"><?php echo htmlspecialchars($display_name); ?></h3>
+                                <p class="text-gray-600 text-sm mb-4">Student</p>
+                                
+                                <div class="space-y-3 text-left">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Account Status:</span>
+                                        <span class="font-medium text-green-600">Active</span>
                                     </div>
-                                <?php endif; ?>
-                            </button>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Last Login:</span>
+                                        <span class="font-medium"><?php echo date('M j, g:i A'); ?></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Forms Submitted:</span>
+                                        <span class="font-medium"><?php echo $user_submissions_result ? $user_submissions_result->num_rows : 0; ?></span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Right Column: Profile and Activities -->
-            <div class="space-y-8">
-                <!-- Profile Summary -->
-                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div class="px-6 pt-6 pb-4 red-orange-table-header text-white">
-                        <h2 class="text-xl font-bold">Profile Summary</h2>
+        <!-- Footer -->
+        <footer class="page-footer bg-gray-800 text-white py-6 mt-8">
+            <div class="max-w-7xl mx-auto px-6">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <div class="mb-4 md:mb-0">
+                        <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
                     </div>
-                    <div class="p-6">
-                        <div class="flex flex-col items-center mb-4">
-                            <!-- Default Profile Avatar -->
-                            <div class="w-20 h-20 red-orange-gradient rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 shadow-lg">
-                                <?php echo generateDefaultAvatar($display_name); ?>
-                            </div>
-                            <h3 class="font-bold text-lg"><?php echo htmlspecialchars($display_name); ?></h3>
-                            <p class="text-gray-600 text-sm">Student</p>
-                        </div>
-                        <div class="space-y-3">
-                            <div class="flex justify-between">
-                                <span class="text-gray-600">SR Code:</span>
-                                <span class="font-medium"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-600">Email:</span>
-                                <span class="font-medium"><?php echo htmlspecialchars($user_profile['email'] ?? 'Not set'); ?></span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-600">Member Since:</span>
-                                <span class="font-medium"><?php echo date('M j, Y', strtotime($user_profile['created_at'])); ?></span>
-                            </div>
-                        </div>
-                        <a href="update_user_profile.php" class="block w-full mt-4 red-orange-gradient-button text-white text-center py-2 rounded-lg font-medium hover:shadow transition-all">
-                            Edit Profile
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Recent Activities -->
-                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div class="px-6 pt-6 pb-4 red-orange-table-header text-white">
-                        <h2 class="text-xl font-bold">Recent Activities</h2>
-                    </div>
-                    <div class="p-6">
-                        <?php if($recent_activities && $recent_activities->num_rows > 0): ?>
-                            <div class="space-y-4">
-                                <?php while($activity = $recent_activities->fetch_assoc()): ?>
-                                    <div class="flex items-start gap-3">
-                                        <div class="mt-1">
-                                            <div class="<?php echo getActivityBg($activity['activity_type']); ?> p-2 rounded-full">
-                                                <i class="bi <?php echo getActivityIcon($activity['activity_type']); ?>"></i>
-                                            </div>
-                                        </div>
-                                        <div class="flex-1">
-                                            <p class="font-medium"><?php echo htmlspecialchars($activity['activity_description']); ?></p>
-                                            <p class="text-gray-500 text-sm"><?php echo date('M j, Y g:i A', strtotime($activity['created_at'])); ?></p>
-                                        </div>
-                                    </div>
-                                <?php endwhile; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="text-center py-6">
-                                <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <i class="bi bi-activity text-gray-400 text-2xl"></i>
-                                </div>
-                                <p class="text-gray-500 mb-2">No recent activities</p>
-                                <p class="text-gray-400 text-sm">Your activities will appear here</p>
-                            </div>
-                        <?php endif; ?>
+                    <div class="text-gray-400 text-sm">
+                        <span>Logged in as: <?php echo htmlspecialchars($_SESSION['username']); ?> | </span>
+                        <span>Role: Student | </span>
+                        <span>Last Access: <?php echo date('g:i A'); ?></span>
                     </div>
                 </div>
             </div>
-        </div>
-    </main>
-
-    <footer class="red-orange-gradient text-white py-4 mt-8">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
-        </div>
-    </footer>
+        </footer>
+    </div>
 
     <!-- Form Modal -->
     <div id="formModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
@@ -797,7 +1161,7 @@ function generateDefaultAvatar($username) {
                         <button onclick="closeLogoutModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-300 transition">
                             Cancel
                         </button>
-                        <a href="logout.php" class="flex-1 red-orange-gradient-button text-white py-3 rounded-lg font-medium text-center hover:shadow-lg transition">
+                        <a href="logout.php" class="flex-1 maroon-gradient-button text-white py-3 rounded-lg font-medium text-center hover:shadow-lg transition">
                             Yes, Logout
                         </a>
                     </div>
@@ -806,7 +1170,41 @@ function generateDefaultAvatar($username) {
         </div>
     </div>
 
-    <!-- JavaScript for real-time clock and form tracking -->
+    <!-- Profile Update Modal -->
+<div id="profileModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div class="flex justify-between items-center p-6 border-b">
+                <h2 id="profileModalTitle" class="text-2xl font-bold text-gray-800">Update Profile Information</h2>
+                <button onclick="closeProfileModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="bi bi-x-lg text-2xl"></i>
+                </button>
+            </div>
+            <div id="profileModalContent" class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <!-- Profile form will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Password Change Modal -->
+<div id="passwordModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+            <div class="flex justify-between items-center p-6 border-b">
+                <h2 id="passwordModalTitle" class="text-2xl font-bold text-gray-800">Change Password</h2>
+                <button onclick="closePasswordModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="bi bi-x-lg text-2xl"></i>
+                </button>
+            </div>
+            <div id="passwordModalContent" class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <!-- Password form will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- JavaScript -->
     <script>
     // User data for form pre-population - INCLUDING MIDDLE NAME
     const userData = {
@@ -823,6 +1221,49 @@ function generateDefaultAvatar($username) {
 
     // Dental chart state management
     let dentalChartState = {};
+
+    // Tab switching functionality
+    function switchTab(tabId) {
+        // Update tab links
+        document.querySelectorAll('.tab-link').forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === '#' + tabId) {
+                link.classList.add('active');
+            }
+        });
+
+        // Update tab content
+        document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.add('hidden');
+            panel.classList.remove('active');
+        });
+
+        const activePanel = document.getElementById(tabId + '-content');
+        if (activePanel) {
+            activePanel.classList.remove('hidden');
+            activePanel.classList.add('active');
+        }
+
+        // Close mobile menu on mobile devices
+        if (window.innerWidth <= 1024) {
+            closeMobileMenu();
+        }
+    }
+
+    // Mobile menu functionality
+    function toggleMobileMenu() {
+        const nav = document.getElementById('tabNav');
+        const overlay = document.getElementById('mobileOverlay');
+        nav.classList.toggle('active');
+        overlay.classList.toggle('active');
+    }
+
+    function closeMobileMenu() {
+        const nav = document.getElementById('tabNav');
+        const overlay = document.getElementById('mobileOverlay');
+        nav.classList.remove('active');
+        overlay.classList.remove('active');
+    }
 
     // Update time every second
     function updateTime() {
@@ -847,11 +1288,35 @@ function generateDefaultAvatar($username) {
         document.getElementById('logoutModal').classList.add('hidden');
     }
 
-    // Update time immediately and then every second
+    // Initialize
     updateTime();
     setInterval(updateTime, 1000);
 
-    // Form modal functions
+ // Tab click handlers
+document.querySelectorAll('.tab-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const tabId = this.getAttribute('data-tab');
+        switchTab(tabId);
+    });
+});
+
+    // Mobile menu button event
+    document.getElementById('mobileMenuBtn').addEventListener('click', toggleMobileMenu);
+
+    // Load saved tab immediately when DOM is ready
+loadSelectedTab();
+
+// Then set up the tab click handlers
+document.querySelectorAll('.tab-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const tabId = this.getAttribute('data-tab');
+        switchTab(tabId);
+    });
+});
+
+    // Form modal functions (keep existing form modal functions unchanged)
     function openFormModal(formType) {
         const modal = document.getElementById('formModal');
         const modalTitle = document.getElementById('modalTitle');
@@ -881,7 +1346,7 @@ function generateDefaultAvatar($username) {
         const modalContent = document.getElementById('modalContent');
 
         // Show loading
-        modalContent.innerHTML = '<div class="text-center py-8"><div class="spinner-border text-orange-600" role="status"><span class="sr-only">Loading...</span></div><p class="mt-2">Loading form...</p></div>';
+        modalContent.innerHTML = '<div class="text-center py-8"><div class="spinner-border text-maroon" role="status"><span class="sr-only">Loading...</span></div><p class="mt-2">Loading form...</p></div>';
 
         // Load form based on type
         fetch(`modules/user_${formType}_form.php`, {
@@ -998,8 +1463,6 @@ function generateDefaultAvatar($username) {
                 'Physician\'s Notes'
             ]
         };
-
-       
 
         // Gray out staff-only fields and add labels
         const allInputs = form.querySelectorAll('input, select, textarea');
@@ -1207,8 +1670,7 @@ function generateDefaultAvatar($username) {
 
     // Enhanced medical form function
     function enhanceMedicalForm(form) {
-        
-      
+        // Implementation remains the same as before
     }
 
     // History form: handle female-only Question 11 (menstrual_age)
@@ -1426,8 +1888,6 @@ function generateDefaultAvatar($username) {
                 updateSignaturePreview();
             });
         }
-        
-        console.log('Signature canvas initialized');
     }
 
     function resetDentalChart() {
@@ -1560,8 +2020,6 @@ function generateDefaultAvatar($username) {
         const form = document.querySelector('#formModal form');
         if (!form) return;
 
-        console.log('Pre-populating form with user data:', userData);
-
         // ENHANCED FIELD MAPPING FOR MIDDLE NAME
         const fieldMappings = {
             // Student Information
@@ -1592,38 +2050,30 @@ function generateDefaultAvatar($username) {
                 fieldMappings[userDataKey].forEach(fieldName => {
                     const input = form.querySelector(`[name="${fieldName}"]`);
                     if (input) {
-                        console.log(`Found field: ${fieldName} for key: ${userDataKey}, current value: "${input.value}", will set to: "${userData[userDataKey]}"`);
-                        
                         if (input.type === 'radio') {
                             // Handle radio buttons
                             const radioToCheck = form.querySelector(`[name="${fieldName}"][value="${userData[userDataKey]}"]`);
                             if (radioToCheck) {
                                 radioToCheck.checked = true;
-                                console.log(`Set radio button: ${fieldName} to value: ${userData[userDataKey]}`);
                             }
                         } else if (input.type === 'select-one') {
                             // Handle select dropdowns
                             const optionToSelect = form.querySelector(`[name="${fieldName}"] option[value="${userData[userDataKey]}"]`);
                             if (optionToSelect) {
                                 optionToSelect.selected = true;
-                                console.log(`Set select: ${fieldName} to value: ${userData[userDataKey]}`);
                             }
                         } else if (!input.value || input.value.trim() === '') {
                             // Handle text inputs, textareas, etc. - only populate if empty
                             input.value = userData[userDataKey];
-                            console.log(`Set text field: ${fieldName} to value: "${userData[userDataKey]}"`);
                             
                             // Make student ID field readonly
                             if (userDataKey === 'student_id' || fieldName === 'student_id' || fieldName === 'student_number') {
                                 input.readOnly = true;
                                 input.classList.add('bg-gray-100', 'cursor-not-allowed');
-                                console.log(`Made field readonly: ${fieldName}`);
                             }
                         }
                     }
                 });
-            } else {
-                console.log(`Skipping ${userDataKey} - value is empty or null: "${userData[userDataKey]}"`);
             }
         });
 
@@ -1632,7 +2082,6 @@ function generateDefaultAvatar($username) {
             if (userData[key] && userData[key].toString().trim() !== '') {
                 const input = form.querySelector(`[name="${key}"]`);
                 if (input && (!input.value || input.value.trim() === '')) {
-                    console.log(`Direct match - Setting ${key} to: "${userData[key]}"`);
                     input.value = userData[key];
                     
                     if (key === 'student_id') {
@@ -1645,8 +2094,6 @@ function generateDefaultAvatar($username) {
 
         // SPECIAL HANDLING FOR MIDDLE NAME - Try to find any middle name field
         if (userData.middle_name && userData.middle_name.toString().trim() !== '') {
-            console.log('Special handling for middle name:', userData.middle_name);
-            
             // Try all possible middle name field variations
             const middleNameFields = [
                 'middle_name', 'mname', 'middlename', 'middleName', 
@@ -1654,83 +2101,69 @@ function generateDefaultAvatar($username) {
                 'm_name', 'middleName', 'middle_name'
             ];
             
-            let middleNamePopulated = false;
             middleNameFields.forEach(fieldName => {
                 const input = form.querySelector(`[name="${fieldName}"]`);
                 if (input && (!input.value || input.value.trim() === '')) {
                     input.value = userData.middle_name;
-                    console.log(`SPECIAL: Set middle name field "${fieldName}" to: "${userData.middle_name}"`);
-                    middleNamePopulated = true;
                 }
             });
-            
-            if (!middleNamePopulated) {
-                console.log('No empty middle name field found to populate');
-            }
         }
-
-        // Log all form fields for debugging
-        const allInputs = form.querySelectorAll('input, select, textarea');
-        console.log('All form fields:');
-        allInputs.forEach(input => {
-            console.log(`Field: ${input.name}, Type: ${input.type}, Value: "${input.value}"`);
-        });
     }
 
     function submitForm(event, formType) {
-    event.preventDefault();
+        event.preventDefault();
 
-    const form = event.target;
-    const formData = new FormData(form);
+        const form = event.target;
+        const formData = new FormData(form);
 
-    // Check if this is a history form that's already been submitted
-    if (formType === 'history' && <?php echo isset($submitted_forms['history_form']) ? 'true' : 'false'; ?>) {
-        // Ask for confirmation since they already have a submission
-        if (!confirm('You have already submitted a history form. Do you want to submit a new one? The previous submission will not be deleted, but clinic staff will see this new version.')) {
-            return;
+        // Check if this is a history form that's already been submitted
+        if (formType === 'history' && <?php echo isset($submitted_forms['history_form']) ? 'true' : 'false'; ?>) {
+            // Ask for confirmation since they already have a submission
+            if (!confirm('You have already submitted a history form. Do you want to submit a new one? The previous submission will not be deleted, but clinic staff will see this new version.')) {
+                return;
+            }
         }
+
+        // Show loading state
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Submitting...';
+        submitBtn.disabled = true;
+
+        fetch(`modules/user_${formType}_form.php`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(result => {
+            // Check if submission was successful
+            if (result.includes('successfully submitted') || result.includes('Form successfully submitted') || result.includes('successfully')) {
+                // Show success message
+                alert('Form submitted successfully! Please wait for admin verification.');
+
+                // Close modal
+                closeFormModal();
+
+                // Refresh the page to update recent submissions
+                location.reload();
+            } else {
+                // Show error message
+                alert('Error submitting form. Please try again. Server response: ' + result.substring(0, 200));
+            }
+        })
+        .catch(error => {
+            console.error('Error submitting form:', error);
+            alert('Error submitting form. Please try again.');
+        })
+        .finally(() => {
+            // Restore button state
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
     }
-
-    // Show loading state
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Submitting...';
-    submitBtn.disabled = true;
-
-    fetch(`modules/user_${formType}_form.php`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.text())
-    .then(result => {
-        // Check if submission was successful
-        if (result.includes('successfully submitted') || result.includes('Form successfully submitted') || result.includes('successfully')) {
-            // Show success message
-            alert('Form submitted successfully! Please wait for admin verification.');
-
-            // Close modal
-            closeFormModal();
-
-            // Refresh the page to update recent submissions
-            location.reload();
-        } else {
-            // Show error message
-            alert('Error submitting form. Please try again. Server response: ' + result.substring(0, 200));
-        }
-    })
-    .catch(error => {
-        console.error('Error submitting form:', error);
-        alert('Error submitting form. Please try again.');
-    })
-    .finally(() => {
-        // Restore button state
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    });
-}
 
     // Close modal when clicking outside
     document.getElementById('formModal').addEventListener('click', function(e) {
@@ -1745,6 +2178,372 @@ function generateDefaultAvatar($username) {
             closeLogoutModal();
         }
     });
+
+    // Close profile modal when clicking outside
+document.getElementById('profileModal').addEventListener('click', function(e) {
+    if (e.target.id === 'profileModal') {
+        closeProfileModal();
+    }
+});
+
+// Close password modal when clicking outside
+document.getElementById('passwordModal').addEventListener('click', function(e) {
+    if (e.target.id === 'passwordModal') {
+        closePasswordModal();
+    }
+});
+
+    // Handle window resize
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 1024) {
+            closeMobileMenu();
+        }
+    });
+
+    // Listen for messages from password modal
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'passwordChangeSuccess') {
+        // Show success message (you can add this similar to profile update)
+        alert(event.data.message);
+        closePasswordModal();
+    }
+    
+    if (event.data === 'closePasswordModal') {
+        closePasswordModal();
+    }
+});
+
+    // Profile modal functions
+function openProfileModal() {
+    const modal = document.getElementById('profileModal');
+    const modalContent = document.getElementById('profileModalContent');
+
+    // Show loading
+    modalContent.innerHTML = '<div class="text-center py-8"><div class="spinner-border text-maroon" role="status"><span class="sr-only">Loading...</span></div><p class="mt-2">Loading profile form...</p></div>';
+
+    // Load profile form content
+    fetch('update_user_profile.php', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.text())
+    .then(html => {
+        // Extract the form content from the HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Get the form element
+        const form = doc.querySelector('form');
+        if (form) {
+            // Remove any session check and redirect scripts
+            const scripts = form.querySelectorAll('script');
+            scripts.forEach(script => {
+                if (script.textContent.includes('header("Location:') || 
+                    script.textContent.includes('window.location')) {
+                    script.remove();
+                }
+            });
+
+            // Update form to use AJAX submission
+            const originalAction = form.getAttribute('action') || '';
+            form.setAttribute('onsubmit', 'submitProfileForm(event)');
+            
+            // Keep original action for reference if needed
+            if (originalAction) {
+                form.setAttribute('data-original-action', originalAction);
+            }
+
+            modalContent.innerHTML = form.outerHTML;
+            
+            // Pre-populate the form with current user data
+            setTimeout(() => {
+                prePopulateProfileForm();
+            }, 100);
+        } else {
+            modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Error loading profile form</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading profile form:', error);
+        modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Error loading profile form</div>';
+    });
+
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
+function closeProfileModal() {
+    const modal = document.getElementById('profileModal');
+    modal.classList.add('hidden');
+}
+
+function submitProfileForm(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    // Show loading state
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Updating...';
+    submitBtn.disabled = true;
+    
+    // Use AJAX to submit the form
+    fetch('update_user_profile.php', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message on the update profile page
+            showProfileSuccessMessage(data.message);
+            
+            // Close modal after 1.5 seconds
+            setTimeout(() => {
+                closeProfileModal();
+            }, 0);
+        } else {
+            // Show error message in modal
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4';
+            errorDiv.innerHTML = `<div class="flex items-center"><i class="bi bi-exclamation-circle mr-2"></i>${data.message}</div>`;
+            
+            // Insert error message at the top of modal content
+            const modalContent = document.getElementById('profileModalContent');
+            modalContent.insertBefore(errorDiv, modalContent.firstChild);
+            
+            // Restore button state
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error updating profile:', error);
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4';
+        errorDiv.innerHTML = '<div class="flex items-center"><i class="bi bi-exclamation-circle mr-2"></i>An error occurred. Please try again.</div>';
+        
+        const modalContent = document.getElementById('profileModalContent');
+        modalContent.insertBefore(errorDiv, modalContent.firstChild);
+        
+        // Restore button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+// Function to show success message on update profile page
+function showProfileSuccessMessage(message) {
+    // Switch to update profile tab if not already there
+    switchTab('update-profile');
+    
+    // Show success message
+    const successDiv = document.getElementById('profileSuccessMessage');
+    const messageText = document.getElementById('successMessageText');
+    
+    messageText.textContent = message;
+    successDiv.classList.remove('hidden');
+    
+    // Auto-hide success message after 5 seconds
+    setTimeout(() => {
+        successDiv.classList.add('hidden');
+    }, 5000);
+}
+
+// Function to pre-populate profile form
+function prePopulateProfileForm() {
+    const form = document.querySelector('#profileModal form');
+    if (!form) return;
+    
+    // Get current user data from PHP variables
+    const profileData = {
+        full_name: '<?php echo htmlspecialchars($display_name); ?>',
+        email: '<?php echo htmlspecialchars($user_profile["email"] ?? ""); ?>',
+        // Add more fields as needed
+    };
+    
+    // Pre-populate form fields
+    Object.keys(profileData).forEach(fieldName => {
+        if (profileData[fieldName]) {
+            const input = form.querySelector(`[name="${fieldName}"]`);
+            if (input && (!input.value || input.value.trim() === '')) {
+                input.value = profileData[fieldName];
+            }
+        }
+    });
+    
+    // Also try to pre-populate from userData object
+    Object.keys(userData).forEach(key => {
+        if (userData[key]) {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (input && (!input.value || input.value.trim() === '')) {
+                input.value = userData[key];
+            }
+        }
+    });
+}
+
+function prePopulateProfileForm() {
+    const form = document.querySelector('#profileModal form');
+    if (!form) return;
+    
+    // Get current user data from PHP variables
+    const profileData = {
+        full_name: '<?php echo htmlspecialchars($display_name); ?>',
+        email: '<?php echo htmlspecialchars($user_profile["email"] ?? ""); ?>',
+        // Add more fields as needed
+    };
+    
+    // Pre-populate form fields
+    Object.keys(profileData).forEach(fieldName => {
+        if (profileData[fieldName]) {
+            const input = form.querySelector(`[name="${fieldName}"]`);
+            if (input && (!input.value || input.value.trim() === '')) {
+                input.value = profileData[fieldName];
+            }
+        }
+    });
+    
+    // Also try to pre-populate from userData object
+    Object.keys(userData).forEach(key => {
+        if (userData[key]) {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (input && (!input.value || input.value.trim() === '')) {
+                input.value = userData[key];
+            }
+        }
+    });
+}
+
+// Tab persistence functionality
+function saveSelectedTab(tabId) {
+    localStorage.setItem('selectedTab', tabId);
+}
+
+function loadSelectedTab() {
+    const savedTab = localStorage.getItem('selectedTab');
+    if (savedTab) {
+        switchTab(savedTab);
+    } else {
+        // If no saved tab, default to dashboard
+        switchTab('dashboard');
+    }
+}
+
+// Update the switchTab function to save the tab
+function switchTab(tabId) {
+    // Update tab links
+    document.querySelectorAll('.tab-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + tabId) {
+            link.classList.add('active');
+        }
+    });
+
+    // Update tab content
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('hidden');
+        panel.classList.remove('active');
+    });
+
+    const activePanel = document.getElementById(tabId + '-content');
+    if (activePanel) {
+        activePanel.classList.remove('hidden');
+        activePanel.classList.add('active');
+    }
+
+    // Save the selected tab
+    saveSelectedTab(tabId);
+
+    // Close mobile menu on mobile devices
+    if (window.innerWidth <= 1024) {
+        closeMobileMenu();
+    }
+}
+
+// Update tab link click handlers to use the updated switchTab function
+document.addEventListener('DOMContentLoaded', function() {
+    // Update all tab links to use the enhanced switchTab function
+    document.querySelectorAll('.tab-link').forEach(link => {
+        const originalOnClick = link.getAttribute('onclick');
+        if (originalOnClick && originalOnClick.includes('switchTab')) {
+            // Extract the tab ID from the onclick attribute
+            const match = originalOnclick.match(/switchTab\('([^']+)'\)/);
+            if (match) {
+                const tabId = match[1];
+                link.setAttribute('onclick', `switchTab('${tabId}')`);
+            }
+        }
+    });
+    
+    // Load saved tab on page load
+    setTimeout(() => {
+        loadSelectedTab();
+    }, 100);
+});
+
+
+function openPasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    const modalContent = document.getElementById('passwordModalContent');
+
+    // Show loading
+    modalContent.innerHTML = '<div class="text-center py-8"><div class="spinner-border text-maroon" role="status"><span class="sr-only">Loading...</span></div><p class="mt-2">Loading password form...</p></div>';
+
+    // Load password form content
+    fetch('change_password.php', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.text())
+    .then(html => {
+        // Extract the form content from the HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Get the form element
+        const form = doc.querySelector('form');
+        if (form) {
+            // Remove any scripts that might redirect
+            const scripts = form.querySelectorAll('script');
+            scripts.forEach(script => {
+                if (script.textContent.includes('header("Location:') || 
+                    script.textContent.includes('window.location') ||
+                    script.textContent.includes('redirectToLogin')) {
+                    script.remove();
+                }
+            });
+
+            // Update form to use AJAX submission
+            form.setAttribute('onsubmit', 'submitPasswordForm(event)');
+
+            modalContent.innerHTML = form.outerHTML;
+        } else {
+            // Try to get the entire body content as fallback
+            const bodyContent = doc.body.innerHTML;
+            modalContent.innerHTML = bodyContent;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading password form:', error);
+        modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Error loading password form. Please check the console for details.</div>';
+    });
+
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
     </script>
 </body>
 </html>

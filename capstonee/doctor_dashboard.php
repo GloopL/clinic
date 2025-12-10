@@ -28,13 +28,17 @@ $display_name = !empty($user['full_name']) ? trim($user['full_name']) : $user['u
 $greeting_name = trim(preg_replace('/^(Dr\.?\s*)+/i', '', $display_name));
 $greeting_display =  ($greeting_name !== '' ? $greeting_name : $display_name);
 
-// Get counts for dashboard - only medical exams for doctor
+// Get counts for dashboard
 $total_patients = $conn->query("SELECT COUNT(*) as count FROM patients")->fetch_assoc()['count'];
-$total_submissions = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'medical_exam'")->fetch_assoc()['count'];
-$total_medical_exams = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE record_type = 'medical_exam'")->fetch_assoc()['count'];
-
-// Get pending verifications count for doctor (medical exams AND history forms)
 $pending_verifications = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'pending' AND (record_type = 'medical_exam' OR record_type = 'history_form')")->fetch_assoc()['count'];
+
+// Get for certification count
+$for_certification_result = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'for_certification' AND (record_type = 'medical_exam' OR record_type = 'history_form')");
+$for_certification_count = $for_certification_result ? $for_certification_result->fetch_assoc()['count'] : 0;
+
+// Get total consultations (all medical records - both medical_exam and history_form)
+$total_consultations_result = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'verified' AND (record_type = 'medical_exam' OR record_type = 'history_form')");
+$total_consultations = $total_consultations_result ? $total_consultations_result->fetch_assoc()['count'] : 0;
 
 // Get recent patients (only those with medical exam records)
 $recent_patients_query = "
@@ -219,20 +223,14 @@ $stmt->execute();
             <a href="modules/records/patients.php" class="mt-4 bg-white text-red-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-red-50 transition">View All</a>
           </div>
           <div class="stats-card-2 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
-    <i class="bi bi-file-earmark-check-fill text-4xl mb-2"></i>
-    <?php
-    // Get count of forms with verification_status = 'for_certification'
-    $for_certification_query = "SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'for_certification'";
-    $for_certification_result = $conn->query($for_certification_query);
-    $for_certification_count = $for_certification_result ? $for_certification_result->fetch_assoc()['count'] : 0;
-    ?>
-    <h3 class="text-3xl font-bold"><?php echo $for_certification_count; ?></h3>
-    <p>For Certification</p>
-    <a href="modules/records/for_certification.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">Review</a>
-</div>
+            <i class="bi bi-file-earmark-check-fill text-4xl mb-2"></i>
+            <h3 class="text-3xl font-bold"><?php echo $for_certification_count; ?></h3>
+            <p>For Certification</p>
+            <a href="modules/records/for_certification.php" class="mt-4 bg-white text-orange-600 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">Review</a>
+          </div>
           <div class="stats-card-3 text-white rounded-xl p-6 flex flex-col items-center shadow-md hover:shadow-lg transition-all">
             <i class="bi bi-heart-pulse-fill text-4xl mb-2"></i>
-            <h3 class="text-3xl font-bold"><?php echo $total_submissions; ?></h3>
+            <h3 class="text-3xl font-bold"><?php echo $total_consultations; ?></h3>
             <p>Consultations</p>
             <a href="modules/records/submissions.php" class="mt-4 bg-white text-orange-500 px-3 py-1 rounded-lg font-semibold text-sm hover:bg-orange-50 transition">View</a>
           </div>

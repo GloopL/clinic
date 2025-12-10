@@ -2,17 +2,29 @@
 session_start();
 include 'config/database.php';
 
-// Redirect if not logged in
+// Set timezone to Philippines
+date_default_timezone_set('Asia/Manila');
+
+// Check if this is a modal request
+$isModal = isset($_GET['modal']) && $_GET['modal'] === 'true';
+
+// Redirect if not logged in (only if not modal)
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
-    exit();
+    if ($isModal) {
+        // For modal, send a message to parent to redirect
+        echo '<script>window.parent.postMessage("redirectToLogin", "*");</script>';
+        exit();
+    } else {
+        header("Location: index.php");
+        exit();
+    }
 }
 
 $user_id = $_SESSION['user_id'];
 $message = '';
 $message_type = '';
 
-// Get current user data FIRST
+// Get current user data
 $user_data = $conn->query("SELECT username, email FROM users WHERE id = $user_id")->fetch_assoc();
 
 // Fetch logged-in user's patient data from registration
@@ -127,34 +139,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         // Sync with patients table for form pre-population
-if (isset($success) && $success) {
-    $student_id = $user_data['username']; // SR Code from users table
+        if (isset($success) && $success) {
+            $student_id = $user_data['username']; // SR Code from users table
 
-    // Check if patient record exists
-    $check_patient = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
-    $check_patient->bind_param("s", $student_id);
-    $check_patient->execute();
-    $patient_result = $check_patient->get_result();
+            // Check if patient record exists
+            $check_patient = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
+            $check_patient->bind_param("s", $student_id);
+            $check_patient->execute();
+            $patient_result = $check_patient->get_result();
 
-    if ($patient_result->num_rows > 0) {
-        // Update existing patient record WITH ADDRESS
-        $stmt = $conn->prepare("UPDATE patients SET first_name=?, middle_name=?, last_name=?, date_of_birth=?, sex=?, program=?, year_level=?, address=? WHERE student_id=?");
-        $stmt->bind_param("sssssssss", $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address, $student_id);
-    } else {
-        // Create new patient record WITH ADDRESS
-        $stmt = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sssssssss", $student_id, $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address);
-    }
+            if ($patient_result->num_rows > 0) {
+                // Update existing patient record WITH ADDRESS
+                $stmt = $conn->prepare("UPDATE patients SET first_name=?, middle_name=?, last_name=?, date_of_birth=?, sex=?, program=?, year_level=?, address=? WHERE student_id=?");
+                $stmt->bind_param("sssssssss", $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address, $student_id);
+            } else {
+                // Create new patient record WITH ADDRESS
+                $stmt = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssssssss", $student_id, $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address);
+            }
 
-    if ($stmt->execute()) {
-        // Patient record updated/created successfully
-    } else {
-        // Don't fail the whole operation for patient sync error, just log it
-        error_log("Patient sync error: " . $stmt->error);
-    }
-    $stmt->close();
-    $check_patient->close();
-}
+            if ($stmt->execute()) {
+                // Patient record updated/created successfully
+            } else {
+                // Don't fail the whole operation for patient sync error, just log it
+                error_log("Patient sync error: " . $stmt->error);
+            }
+            $stmt->close();
+            $check_patient->close();
+        }
 
         // Update email in users table if successful
         if (isset($success) && $success) {
@@ -166,8 +178,29 @@ if (isset($success) && $success) {
 
                 $message = "Profile updated successfully!";
                 $message_type = "success";
+                
+                // Check if this is an AJAX request
+                if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                    // Return JSON response for AJAX
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $message,
+                        'message_type' => $message_type
+                    ]);
+                    exit();
+                }
             }
         }
+    }
+    
+    // If AJAX request and we haven't exited yet (error case)
+    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+        echo json_encode([
+            'success' => false,
+            'message' => $message ?: 'Unknown error occurred',
+            'message_type' => $message_type ?: 'error'
+        ]);
+        exit();
     }
 }
 
@@ -205,7 +238,6 @@ if ($patient_data) {
     if (empty($user_details['gender'])) {
         $user_details['gender'] = $patient_data['sex'] ?? '';
     }
-    // Leave email, department, and year_level blank as requested
 }
 ?>
 
@@ -214,308 +246,227 @@ if ($patient_data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Update Profile - BSU Clinic Record Management System</title>
+    <title>Edit Profile</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        /* Custom red to orange gradient theme */
-        .red-orange-gradient {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        /* Custom maroon theme (#800000) */
+        :root {
+            --maroon-primary: #800000;
+            --maroon-dark: #660000;
+            --maroon-light: #a00000;
+            --maroon-bg: #fff5f5;
         }
         
-        .red-orange-gradient-light {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5, #fed7aa);
+        .maroon-gradient {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-gradient-card {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        .maroon-gradient-button {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-gradient-card-light {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
+        .maroon-gradient-button:hover {
+            background: linear-gradient(135deg, var(--maroon-dark), var(--maroon-primary));
         }
         
-        .red-orange-gradient-button {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+        .focus-maroon:focus {
+            border-color: var(--maroon-primary);
+            ring-color: var(--maroon-primary);
+            --tw-ring-color: var(--maroon-primary);
         }
         
-        .red-orange-gradient-button:hover {
-            background: linear-gradient(135deg, #b91c1c, #c2410c);
-        }
-        
-        .red-orange-gradient-alert {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
-            border-left-color: #ea580c;
-        }
-        
-        .red-orange-table-header {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
-        }
-        
-        .red-orange-table-row {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
-        }
-        
-        .red-orange-table-row:hover {
-            background: linear-gradient(135deg, #fee2e2, #fed7aa);
-        }
-        
-        .red-orange-badge {
-            background: linear-gradient(135deg, #fecaca, #fed7aa);
-            color: #7c2d12;
-        }
-        
-        .red-orange-badge-verified {
-            background: linear-gradient(135deg, #dcfce7, #bbf7d0);
-            color: #166534;
-        }
-        
-        .red-orange-badge-pending {
-            background: linear-gradient(135deg, #fef3c7, #fde68a);
-            color: #92400e;
-        }
-        
-        .red-orange-badge-rejected {
-            background: linear-gradient(135deg, #fee2e2, #fecaca);
-            color: #991b1b;
-        }
-        
-        .stats-card-1 {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
-        }
-        
-        .stats-card-2 {
-            background: linear-gradient(135deg, #ea580c, #f97316);
-        }
-        
-        .stats-card-3 {
-            background: linear-gradient(135deg, #f97316, #fb923c);
-        }
-        
-        .form-card-history {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
-        }
-        
-        .form-card-dental {
-            background: linear-gradient(135deg, #ea580c, #f97316);
-        }
-        
-        .form-card-medical {
-            background: linear-gradient(135deg, #f97316, #fb923c);
-        }
-        
-        .focus-red-orange:focus {
-            border-color: #ea580c;
-            ring-color: #ea580c;
-            --tw-ring-color: #ea580c;
+        /* Hide scrollbar for iframe */
+        body {
+            overflow: hidden;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-orange-50 to-red-50 min-h-screen flex flex-col">
-
-    <header class="red-orange-gradient text-white shadow-md sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-            <div class="flex items-center gap-3">
-                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-12 h-12 rounded-full object-cover border-4 border-white bg-white">
-                <h1 class="text-lg font-bold">BSU Clinic Record Management System</h1>
+<body class="bg-white">
+    <div class="max-h-screen overflow-y-auto p-0">
+        <!-- Modal header -->
+        <div class="sticky top-0 z-10 bg-white border-b px-6 py-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">Edit Profile Information</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="bi bi-x-lg text-2xl"></i>
+                </button>
             </div>
-            <nav class="flex items-center gap-6">
-                <a href="user_dashboard.php" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </a>
-                <a href="my_diagnoses.php" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-clipboard2-heart-fill"></i> My Diagnoses
-                </a>
-                <a href="update_user_profile.php" class="hover:text-yellow-200 flex items-center gap-1 font-semibold">
-                    <i class="bi bi-person-circle"></i> Profile
-                </a>
-                <a href="logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </a>
-            </nav>
         </div>
-    </header>
 
-    <main class="flex-grow max-w-4xl mx-auto px-4 py-8 w-full">
-        <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div class="px-8 py-6 red-orange-gradient text-white">
-                <h2 class="text-2xl font-bold">Update Profile</h2>
-                <p class="text-white text-sm opacity-90">Manage your personal information</p>
+        <!-- Error message -->
+        <?php if ($message && $message_type == 'error'): ?>
+            <div class="bg-red-100 border-l-4 border-red-400 text-red-700 p-4 mx-6 mt-4">
+                <div class="flex items-center">
+                    <i class="bi bi-exclamation-circle mr-2"></i>
+                    <?php echo $message; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <form method="POST" class="p-6 space-y-6" id="profileForm">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Basic Information -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">SR Code</label>
+                        <input type="text" value="<?php echo htmlspecialchars($user_data['username']); ?>" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 focus-maroon" readonly>
+                        <p class="text-xs text-gray-500 mt-1">SR Code cannot be changed</p>
+                    </div>
+
+                    <div>
+                        <label for="full_name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                        <input type="text" id="full_name" name="full_name"
+                               value="<?php echo htmlspecialchars($user_details['full_name'] ?? ''); ?>"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
+                               placeholder="Enter your full name">
+                    </div>
+
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                        <input type="email" id="email" name="email"
+                               value="<?php echo htmlspecialchars($user_data['email'] ?? ''); ?>"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
+                               placeholder="Enter your email address">
+                    </div>
+
+                    <div>
+                        <label for="contact_number" class="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                        <input type="tel" id="contact_number" name="contact_number"
+                               value="<?php echo htmlspecialchars($user_details['contact_number'] ?? ''); ?>"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
+                               placeholder="Enter your contact number">
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Additional Information</h3>
+                    
+                    <div>
+                        <label for="department" class="block text-sm font-medium text-gray-700 mb-1">Program</label>
+                        <input type="text" id="department" name="department" 
+                               value="<?php echo htmlspecialchars($user_details['department'] ?? ''); ?>"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
+                               placeholder="Enter Program">
+                    </div>
+
+                    <div>
+                        <label for="year_level" class="block text-sm font-medium text-gray-700 mb-1">Year Level</label>
+                        <select id="year_level" name="year_level" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
+                            <option value="" <?php echo empty($user_details['year_level']) ? 'selected' : ''; ?>>Select Year Level</option>
+                            <option value="1st Year" <?php echo ($user_details['year_level'] ?? '') == '1st Year' ? 'selected' : ''; ?>>1st</option>
+                            <option value="2nd Year" <?php echo ($user_details['year_level'] ?? '') == '2nd Year' ? 'selected' : ''; ?>>2nd</option>
+                            <option value="3rd Year" <?php echo ($user_details['year_level'] ?? '') == '3rd Year' ? 'selected' : ''; ?>>3rd</option>
+                            <option value="4th Year" <?php echo ($user_details['year_level'] ?? '') == '4th Year' ? 'selected' : ''; ?>>4th</option>
+                            <option value="5th Year" <?php echo ($user_details['year_level'] ?? '') == '5th Year' ? 'selected' : ''; ?>>5th</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="birthdate" class="block text-sm font-medium text-gray-700 mb-1">Birthdate</label>
+                        <input type="date" id="birthdate" name="birthdate"
+                               value="<?php echo htmlspecialchars($user_details['birthdate'] ?? ''); ?>"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
+                    </div>
+
+                    <div>
+                        <label for="gender" class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                        <select id="gender" name="gender" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
+                            <option value="">Select Gender</option>
+                            <option value="Male" <?php echo ($user_details['gender'] ?? '') == 'Male' ? 'selected' : ''; ?>>Male</option>
+                            <option value="Female" <?php echo ($user_details['gender'] ?? '') == 'Female' ? 'selected' : ''; ?>>Female</option>
+                            <option value="Other" <?php echo ($user_details['gender'] ?? '') == 'Other' ? 'selected' : ''; ?>>Other</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
-            <?php if ($message): ?>
-                <div class="<?php echo $message_type == 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'; ?> border-l-4 p-4 mx-8 mt-4">
-                    <div class="flex items-center">
-                        <i class="bi <?php echo $message_type == 'success' ? 'bi-check-circle' : 'bi-exclamation-circle'; ?> mr-2"></i>
-                        <?php echo $message; ?>
-                    </div>
-                </div>
-            <?php endif; ?>
+            <div class="pt-4">
+                <label for="address" class="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <textarea id="address" name="address" rows="3"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
+                          placeholder="Enter your complete address"><?php echo htmlspecialchars($user_details['address'] ?? ''); ?></textarea>
+            </div>
 
-            <form method="POST" class="p-8 space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Basic Information -->
-                    <div class="space-y-4">
-                        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">SR Code</label>
-                            <input type="text" value="<?php echo htmlspecialchars($user_data['username']); ?>" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 focus-red-orange" readonly>
-                            <p class="text-xs text-gray-500 mt-1">SR Code cannot be changed</p>
-                        </div>
-
-                        <div>
-                            <label for="full_name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                            <input type="text" id="full_name" name="full_name"
-                                   value="<?php echo htmlspecialchars($user_details['full_name'] ?? ''); ?>"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange"
-                                   placeholder="Enter your full name">
-                        </div>
-
-                        <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                            <input type="email" id="email" name="email"
-                                   value="<?php echo htmlspecialchars($user_data['email'] ?? ''); ?>"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange"
-                                   placeholder="Enter your email address">
-                        </div>
-
-                        <div>
-                            <label for="contact_number" class="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
-                            <input type="tel" id="contact_number" name="contact_number"
-                                   value="<?php echo htmlspecialchars($user_details['contact_number'] ?? ''); ?>"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange"
-                                   placeholder="Enter your contact number">
-                        </div>
-                    </div>
-
-                    <!-- Additional Information -->
-                    <div class="space-y-4">
-                        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Additional Information</h3>
-                        
-                      <div>
-    <label for="department" class="block text-sm font-medium text-gray-700 mb-1">Program</label>
-    <input type="text" id="department" name="department" 
-           value="<?php echo htmlspecialchars($user_details['department'] ?? ''); ?>"
-           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange"
-           placeholder="Enter Program">
-</div>
-
-                        <div>
-                            <label for="year_level" class="block text-sm font-medium text-gray-700 mb-1">Year Level</label>
-                            <select id="year_level" name="year_level" 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus-border-orange-500 focus-red-orange">
-                                <option value="" <?php echo empty($user_details['year_level']) ? 'selected' : ''; ?>>Select Year Level</option>
-                                <option value="1st Year" <?php echo ($user_details['year_level'] ?? '') == '1st Year' ? 'selected' : ''; ?>>1st</option>
-                                <option value="2nd Year" <?php echo ($user_details['year_level'] ?? '') == '2nd Year' ? 'selected' : ''; ?>>2nd</option>
-                                <option value="3rd Year" <?php echo ($user_details['year_level'] ?? '') == '3rd Year' ? 'selected' : ''; ?>>3rd</option>
-                                <option value="4th Year" <?php echo ($user_details['year_level'] ?? '') == '4th Year' ? 'selected' : ''; ?>>4th</option>
-                                <option value="5th Year" <?php echo ($user_details['year_level'] ?? '') == '5th Year' ? 'selected' : ''; ?>>5th</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="birthdate" class="block text-sm font-medium text-gray-700 mb-1">Birthdate</label>
-                            <input type="date" id="birthdate" name="birthdate"
-                                   value="<?php echo htmlspecialchars($user_details['birthdate'] ?? ''); ?>"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange">
-                        </div>
-
-                        <div>
-                            <label for="gender" class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                            <select id="gender" name="gender" 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange">
-                                <option value="">Select Gender</option>
-                                <option value="Male" <?php echo ($user_details['gender'] ?? '') == 'Male' ? 'selected' : ''; ?>>Male</option>
-                                <option value="Female" <?php echo ($user_details['gender'] ?? '') == 'Female' ? 'selected' : ''; ?>>Female</option>
-                                <option value="Other" <?php echo ($user_details['gender'] ?? '') == 'Other' ? 'selected' : ''; ?>>Other</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pt-4">
-                    <label for="address" class="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                    <textarea id="address" name="address" rows="3"
-                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus-red-orange"
-                              placeholder="Enter your complete address"><?php echo htmlspecialchars($user_details['address'] ?? ''); ?></textarea>
-                </div>
-
-                <div class="flex gap-4 pt-6 border-t">
-                    <button type="submit" class="red-orange-gradient-button text-white px-6 py-2 rounded-lg font-medium hover:shadow-lg transition-all flex items-center gap-2">
-                        <i class="bi bi-check-lg"></i> Update Profile
-                    </button>
-                    <a href="user_dashboard.php" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-2 rounded-lg font-medium transition duration-300 flex items-center gap-2">
-                        <i class="bi bi-arrow-left"></i> Back to Dashboard
-                    </a>
-                </div>
-            </form>
-        </div>
-    </main>
-
-    <footer class="red-orange-gradient text-white py-4 mt-8">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
-        </div>
-    </footer>
+            <div class="flex gap-4 pt-6 border-t">
+                <button type="submit" class="maroon-gradient-button text-white px-6 py-2 rounded-lg font-medium hover:shadow-lg transition-all flex items-center gap-2">
+                    <i class="bi bi-check-lg"></i> Update Profile
+                </button>
+                <button type="button" onclick="closeModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-2 rounded-lg font-medium transition duration-300 flex items-center gap-2">
+                    <i class="bi bi-x-lg"></i> Cancel
+                </button>
+            </div>
+        </form>
+    </div>
 
     <script>
-// Add confirmation for logout
-document.addEventListener('DOMContentLoaded', function() {
-    const logoutLinks = document.querySelectorAll('a[href="logout.php"]');
-    
-    logoutLinks.forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
+        // Function to close the modal
+        function closeModal() {
+            // Send message to parent to close modal
+            window.parent.postMessage('closeProfileModal', '*');
+        }
+        
+        // Handle form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('profileForm');
             
-            // Create custom confirmation modal
-            const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-            modal.innerHTML = `
-                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
-                    <div class="p-6 text-center">
-                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="bi bi-question-circle text-red-600 text-2xl"></i>
-                        </div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-2">Confirm Logout</h3>
-                        <p class="text-gray-600 mb-6">Are you sure you want to log out of your account?</p>
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Show loading state
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Updating...';
+                submitBtn.disabled = true;
+                
+                // Submit via AJAX
+                const formData = new FormData(form);
+                
+                fetch('update_user_profile.php', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Send success message to parent
+                        window.parent.postMessage({
+                            type: 'profileUpdateSuccess',
+                            message: data.message
+                        }, '*');
                         
-                        <div class="flex gap-3 justify-center">
-                            <button type="button" id="cancelLogout" 
-                                class="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors">
-                                Cancel
-                            </button>
-                            <button type="button" id="confirmLogout" 
-                                class="red-orange-gradient-button text-white px-5 py-2.5 rounded-lg font-medium hover:shadow-lg transition-all">
-                                Yes, Logout
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-            
-            // Handle cancel button
-            document.getElementById('cancelLogout').addEventListener('click', function() {
-                document.body.removeChild(modal);
-            });
-            
-            // Handle confirm button
-            document.getElementById('confirmLogout').addEventListener('click', function() {
-                window.location.href = 'logout.php';
-            });
-            
-            // Close modal when clicking outside
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    document.body.removeChild(modal);
-                }
+                        // Close modal after 1.5 seconds
+                        setTimeout(() => {
+                            closeModal();
+                        }, 1500);
+                    } else {
+                        // Show error message
+                        alert('Error: ' + data.message);
+                        
+                        // Restore button state
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                    
+                    // Restore button state
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                });
             });
         });
-    });
-});
-</script>
+    </script>
 </body>
 </html>
