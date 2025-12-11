@@ -2511,106 +2511,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <input type="radio" name="special_diet" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['special_diet']) && $record['special_diet'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                                </tbody>
+                </tbody>
             </table>
-           <!-- Certification Section for History Form -->
-<div class="certification-section rounded-lg p-4 mb-6 border-2 border-green-500 bg-green-50">
-    <h3 class="font-semibold text-lg mb-4 text-green-800">CERTIFICATION</h3>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- LEFT COLUMN -->
-        <div class="space-y-4">
-            <p class="text-sm text-green-800 font-medium mb-3">
-                "I hereby certify that the above information given are true and correct as to the best of my knowledge."
-            </p>
-            
-            <div class="mt-4">
-                <div class="border-b-2 border-green-400 pt-4 pb-1 min-h-[40px] mb-2">
-                    <span class="text-sm text-gray-600"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))) ?></span>
-                </div>
-                <div>
-                    <label class="block font-medium mb-1 text-green-700">Date:</label>
-                    <?= render_editable_field($record, 'student_certification_date', $is_nurse, false, 'date') ?>
-                </div>
-            </div>
-        </div>
-        
-        <!-- RIGHT COLUMN -->
-        <div class="space-y-4">
-            <div>
-                <label class="block font-medium mb-2 text-green-700">Examined by:</label>
-                <div class="space-y-2">
-                    <?php
-                    // Get current logged-in user's information
-                    $current_user_id = $_SESSION['user_id'] ?? 0;
-                    $examiner_name = '';
-                    $license_no = '0169430'; // Sample license number
-                    
-                    if ($current_user_id) {
-                        // Fetch user details from database
-                        $user_query = $conn->prepare("SELECT full_name, username, role FROM users WHERE id = ?");
-                        $user_query->bind_param("i", $current_user_id);
-                        $user_query->execute();
-                        $user_result = $user_query->get_result();
-                        
-                        if ($user_result->num_rows > 0) {
-                            $user_data = $user_result->fetch_assoc();
-                            
-                            // Use full_name if available, otherwise use username
-                            if (!empty($user_data['full_name']) && trim($user_data['full_name']) !== '') {
-                                $examiner_name = trim($user_data['full_name']);
-                            } else {
-                                $examiner_name = $user_data['username'];
-                            }
-                            
-                            // Add title based on role
-                            if ($user_data['role'] === 'doctor' || $user_data['role'] === 'physician') {
-                                $examiner_name .= ' M.D.';
-                            } elseif ($user_data['role'] === 'dentist') {
-                                $examiner_name .= ' D.M.D.';
-                            }
-                        }
-                        $user_query->close();
-                    }
-                    
-                    // If no user found, fallback to session username
-                    if (empty($examiner_name) && isset($_SESSION['username'])) {
-                        $examiner_name = $_SESSION['username'];
-                    }
-                    
-                    // Final fallback
-                    if (empty($examiner_name)) {
-                        $examiner_name = 'MARSON KIM L. PERMENTILLA M.D.';
-                    }
-                    
-                    // Check if there's already a physician name in the record
-                    if (!empty($record['physician_name'])) {
-                        $examiner_name = $record['physician_name'];
-                    }
-                    ?>
-                    <input type="text" name="physician_name" value="<?= htmlspecialchars($examiner_name) ?>" 
-                           class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
-                           <?= !$is_nurse ? 'readonly' : '' ?>>
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-green-700">License No.:</span>
-                        <input type="text" name="license_no" value="<?= htmlspecialchars($license_no) ?>" 
-                               class="w-32 rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
-                               <?= !$is_nurse ? 'readonly' : '' ?>>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-green-700">Date:</span>
-                        <?= render_editable_field($record, 'physician_certification_date', $is_nurse, false, 'date') ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- END CERTIFICATION SECTION for History Form -->
-
         </div>
 
-        <!-- For Females Only Section - Only show if patient is female -->
+                <!-- For Females Only Section - Only show if patient is female -->
         <?php if (isset($record['sex']) && strtolower($record['sex']) === 'female'): ?>
         <div class="female-only-section mt-4">
             <h5 class="text-orange-600 font-bold">FOR FEMALES ONLY</h5>
@@ -2638,10 +2543,112 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <?= render_editable_field($record, 'first_menstrual_age', $is_nurse, false, 'text', strtolower($record['sex']) !== 'female') ?>
                         </td>
                     </tr>
-                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
+        <?php endif; ?>
+        <!-- END For Females Only Section -->
+
+        <!-- Certification Section for History Form -->
+        <!-- MOVED HERE - AFTER THE FEMALE-ONLY SECTION -->
+        <div class="certification-section rounded-lg p-4 mb-6 border-2 border-green-500 bg-green-50">
+            <h3 class="font-semibold text-lg mb-4 text-green-800">CERTIFICATION</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- LEFT COLUMN -->
+                <div class="space-y-4">
+                    <p class="text-sm text-green-800 font-medium mb-3">
+                        "I hereby certify that the above information given are true and correct as to the best of my knowledge."
+                    </p>
+                    
+                    <div class="mt-4">
+                        <div class="border-b-2 border-green-400 pt-4 pb-1 min-h-[40px] mb-2">
+                            <span class="text-sm text-gray-600"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))) ?></span>
+                        </div>
+                        <div>
+                            <label class="block font-medium mb-1 text-green-700">Date:</label>
+                            <?= render_editable_field($record, 'student_certification_date', $is_nurse, false, 'date') ?>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- RIGHT COLUMN -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block font-medium mb-2 text-green-700">Examined by:</label>
+                        <div class="space-y-2">
+                            <?php
+                            // Get current logged-in user's information
+                            $current_user_id = $_SESSION['user_id'] ?? 0;
+                            $examiner_name = '';
+                            $license_no = '0169430'; // Sample license number
+                            
+                            if ($current_user_id) {
+                                // Fetch user details from database
+                                $user_query = $conn->prepare("SELECT full_name, username, role FROM users WHERE id = ?");
+                                $user_query->bind_param("i", $current_user_id);
+                                $user_query->execute();
+                                $user_result = $user_query->get_result();
+                                
+                                if ($user_result->num_rows > 0) {
+                                    $user_data = $user_result->fetch_assoc();
+                                    
+                                    // Use full_name if available, otherwise use username
+                                    if (!empty($user_data['full_name']) && trim($user_data['full_name']) !== '') {
+                                        $examiner_name = trim($user_data['full_name']);
+                                    } else {
+                                        $examiner_name = $user_data['username'];
+                                    }
+                                    
+                                    // Add title based on role
+                                    if ($user_data['role'] === 'doctor' || $user_data['role'] === 'physician') {
+                                        $examiner_name .= ' M.D.';
+                                    } elseif ($user_data['role'] === 'dentist') {
+                                        $examiner_name .= ' D.M.D.';
+                                    }
+                                }
+                                $user_query->close();
+                            }
+                            
+                            // If no user found, fallback to session username
+                            if (empty($examiner_name) && isset($_SESSION['username'])) {
+                                $examiner_name = $_SESSION['username'];
+                            }
+                            
+                            // Final fallback
+                            if (empty($examiner_name)) {
+                                $examiner_name = 'MARSON KIM L. PERMENTILLA M.D.';
+                            }
+                            
+                            // Check if there's already a physician name in the record
+                            if (!empty($record['physician_name'])) {
+                                $examiner_name = $record['physician_name'];
+                            }
+                            ?>
+                            <input type="text" name="physician_name" value="<?= htmlspecialchars($examiner_name) ?>" 
+                                   class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                   <?= !$is_nurse ? 'readonly' : '' ?>>
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium text-green-700">License No.:</span>
+                                <input type="text" name="license_no" value="<?= htmlspecialchars($license_no) ?>" 
+                                       class="w-32 rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                       <?= !$is_nurse ? 'readonly' : '' ?>>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium text-green-700">Date:</span>
+                                <?= render_editable_field($record, 'physician_certification_date', $is_nurse, false, 'date') ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- END CERTIFICATION SECTION for History Form -->
+    </div>
+
+
+
+       
         <?php endif; ?>
     </div>
 <?php endif; ?>

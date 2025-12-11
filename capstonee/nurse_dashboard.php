@@ -356,6 +356,73 @@ function getActivityBg($activity_type) {
         .pulse-badge {
             animation: pulse-badge 2s infinite;
         }
+
+        /* Iframe loading styles */
+#patients-loading {
+    animation: fadeIn 0.3s ease;
+}
+
+#patients-iframe-container iframe {
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Spinner for loading */
+.spinner-border {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    vertical-align: text-bottom;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to { transform: rotate(360deg); }
+}
+
+/* Add this to your existing styles */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Important for flex children to scroll */
+}
+
+.tab-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* For patients tab only */
+#patients-content.active ~ .page-footer {
+    margin-top: 0;
+}
+
+#patients-content.active {
+    margin: -1.5rem; /* Counteract the p-6 from main-content */
+}
+
+/* Fix for patients tab only */
+#patients-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#patients-content .bg-white {
+    flex: 1;
+    min-height: 0;
+}
+
     </style>
 </head>
 <body class="bg-maroon-light">
@@ -677,47 +744,48 @@ function getActivityBg($activity_type) {
                     </div>
                 </div>
             </div>
-
-            <!-- Patients Tab -->
-            <div id="patients-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-people-fill text-maroon"></i> Patient Management
-                    </h2>
-                    <p class="text-gray-600 mb-6">View and manage all patient records</p>
-                    
-                    <div class="mb-6">
-                        <a href="modules/records/patients.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-person-plus"></i> Manage All Patients
-                        </a>
-                    </div>
-                    
-                    <!-- Patient search and filters would go here -->
-                    <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-maroon mb-3 flex items-center gap-2">
-                            <i class="bi bi-info-circle-fill"></i> Patient Management Guidelines
-                        </h3>
-                        <ul class="space-y-2 text-gray-700">
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Search patients by name, student ID, or program</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>View complete patient medical history</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Update patient information as needed</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Export patient data for reporting</span>
-                            </li>
-                        </ul>
-                    </div>
+<!-- Patients Tab -->
+<div id="patients-content" class="tab-panel hidden">
+    <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1">
+        <!-- Loading indicator -->
+        <div id="patients-loading" class="h-full flex items-center justify-center">
+            <div class="text-center">
+                <div class="spinner-border text-maroon" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+                <p class="mt-2 text-gray-600">Loading patient management...</p>
+            </div>
+        </div>
+        
+        <!-- Content container -->
+        <div id="patients-iframe-container" class="hidden h-full">
+            <iframe 
+                id="patients-iframe"
+                src="modules/records/patients.php"
+                frameborder="0"
+                class="w-full h-full"
+                style="border: none;"
+                onload="hidePatientsLoading()"
+            ></iframe>
+        </div>
+        
+        <!-- Fallback content if iframe fails -->
+        <div id="patients-fallback" class="hidden h-full flex items-center justify-center">
+            <div class="text-center p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                    <i class="bi bi-people-fill text-maroon"></i> Patient Management
+                </h2>
+                <p class="text-gray-600 mb-6">View and manage all patient records</p>
+                
+                <div class="mb-6">
+                    <a href="modules/records/patients.php" target="_blank" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
+                        <i class="bi bi-box-arrow-up-right"></i> Open Patients Management in New Tab
+                    </a>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
 
             <!-- Submissions Tab -->
             <div id="submissions-content" class="tab-panel hidden">
@@ -1021,35 +1089,48 @@ function getActivityBg($activity_type) {
     <script>
     // Tab switching functionality
     function switchTab(tabId) {
-        // Update tab links
-        document.querySelectorAll('.tab-link').forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('href') === '#' + tabId) {
-                link.classList.add('active');
-            }
-        });
-
-        // Update tab content
-        document.querySelectorAll('.tab-panel').forEach(panel => {
-            panel.classList.add('hidden');
-            panel.classList.remove('active');
-        });
-
-        const activePanel = document.getElementById(tabId + '-content');
-        if (activePanel) {
-            activePanel.classList.remove('hidden');
-            activePanel.classList.add('active');
+    // Update tab links
+    document.querySelectorAll('.tab-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + tabId) {
+            link.classList.add('active');
         }
+    });
 
-        // Save tab selection
-        localStorage.setItem('nurseSelectedTab', tabId);
+    // Update tab content
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('hidden');
+        panel.classList.remove('active');
+    });
 
-        // Close mobile menu on mobile devices
-        if (window.innerWidth <= 1024) {
-            closeMobileMenu();
+    const activePanel = document.getElementById(tabId + '-content');
+    if (activePanel) {
+        activePanel.classList.remove('hidden');
+        activePanel.classList.add('active');
+        
+        // Special handling for patients tab
+        if (tabId === 'patients') {
+            // Delay loading slightly for smooth transition
+            setTimeout(() => {
+                loadPatientsContent();
+            }, 100);
+        }
+        
+        // Special handling for other tabs that might need dynamic loading
+        if (tabId === 'submissions') {
+            // Refresh submission counts if needed
+            updateSubmissionCounts();
         }
     }
 
+    // Save tab selection
+    localStorage.setItem('nurseSelectedTab', tabId);
+
+    // Close mobile menu on mobile devices
+    if (window.innerWidth <= 1024) {
+        closeMobileMenu();
+    }
+}
     // Mobile menu functionality
     function toggleMobileMenu() {
         const nav = document.getElementById('tabNav');
@@ -1335,7 +1416,114 @@ function getActivityBg($activity_type) {
                 closeMobileMenu();
             }
         });
+
+        // Add iframe error handling
+    const iframe = document.getElementById('patients-iframe');
+    if (iframe) {
+        iframe.addEventListener('error', function() {
+            console.error('Failed to load patients iframe');
+            showPatientsFallback();
+        });
+        
+        // Check if iframe loads successfully within 10 seconds
+        setTimeout(() => {
+            const loadingEl = document.getElementById('patients-loading');
+            if (!loadingEl.classList.contains('hidden')) {
+                showPatientsFallback();
+            }
+        }, 10000);
+    }
     });
+
+    // Patients tab loading functions
+let patientsIframeLoaded = false;
+
+function loadPatientsContent() {
+    const loadingEl = document.getElementById('patients-loading');
+    const containerEl = document.getElementById('patients-iframe-container');
+    const fallbackEl = document.getElementById('patients-fallback');
+    const iframeEl = document.getElementById('patients-iframe');
+    
+    // Only load iframe content once
+    if (!patientsIframeLoaded) {
+        // Show loading
+        loadingEl.classList.remove('hidden');
+        containerEl.classList.add('hidden');
+        fallbackEl.classList.add('hidden');
+        
+        // Set flag to prevent multiple loads
+        patientsIframeLoaded = true;
+        
+        // Load the iframe content
+        iframeEl.src = "modules/records/patients.php";
+    } else {
+        // If already loaded, just show the iframe
+        loadingEl.classList.add('hidden');
+        containerEl.classList.remove('hidden');
+        fallbackEl.classList.add('hidden');
+    }
+}
+
+function hidePatientsLoading() {
+    const loadingEl = document.getElementById('patients-loading');
+    const containerEl = document.getElementById('patients-iframe-container');
+    
+    loadingEl.classList.add('hidden');
+    containerEl.classList.remove('hidden');
+}
+
+function showPatientsFallback() {
+    const loadingEl = document.getElementById('patients-loading');
+    const containerEl = document.getElementById('patients-iframe-container');
+    const fallbackEl = document.getElementById('patients-fallback');
+    
+    loadingEl.classList.add('hidden');
+    containerEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
+}
+
+function resizeIframe(iframe) {
+    // Calculate available height
+    const header = document.querySelector('header');
+    const footer = document.querySelector('.page-footer');
+    const tabNav = document.getElementById('tabNav');
+    const mainContent = document.querySelector('.main-content');
+    
+    const headerHeight = header ? header.offsetHeight : 0;
+    const footerHeight = footer ? footer.offsetHeight : 0;
+    const tabNavHeight = tabNav ? tabNav.offsetHeight : 0;
+    const mainContentTop = mainContent ? mainContent.getBoundingClientRect().top : 0;
+    
+    // Calculate available height
+    const windowHeight = window.innerHeight;
+    const availableHeight = windowHeight - mainContentTop - footerHeight - 40; // 40px buffer
+    
+    // Set iframe height
+    iframe.style.height = Math.max(500, availableHeight) + 'px';
+    
+    // Also resize on window resize
+    window.addEventListener('resize', function() {
+        const newAvailableHeight = window.innerHeight - mainContentTop - footerHeight - 40;
+        iframe.style.height = Math.max(500, newAvailableHeight) + 'px';
+    });
+}
+
+function hidePatientsLoading() {
+    const loadingEl = document.getElementById('patients-loading');
+    const containerEl = document.getElementById('patients-iframe-container');
+    
+    loadingEl.classList.add('hidden');
+    containerEl.classList.remove('hidden');
+    
+    // Resize the iframe after it's shown
+    const iframe = document.getElementById('patients-iframe');
+    if (iframe) {
+        setTimeout(() => {
+            resizeIframe(iframe);
+        }, 100);
+    }
+}
+
     </script>
 </body>
 </html>
