@@ -1278,6 +1278,54 @@ $user_submissions_result = $stmt->get_result();
         document.getElementById('currentTime').textContent = timeString;
     }
 
+
+// Password toggle initialization function
+function initializePasswordToggles() {
+    console.log('Initializing password toggles...');
+    
+    // Find all password toggle buttons in the modal
+    const toggleButtons = document.querySelectorAll('#passwordModalContent button[data-target]');
+    console.log('Found toggle buttons:', toggleButtons.length);
+    
+    toggleButtons.forEach(button => {
+        // Remove any existing event listeners
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        // Add click event to the new button
+        newButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const targetId = this.getAttribute('data-target');
+            console.log('Toggle clicked for:', targetId);
+            
+            const input = document.getElementById(targetId);
+            const icon = this.querySelector('i');
+            
+            if (input && icon) {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.className = 'bi bi-eye-slash';
+                    this.setAttribute('title', 'Hide password');
+                } else {
+                    input.type = 'password';
+                    icon.className = 'bi bi-eye';
+                    this.setAttribute('title', 'Show password');
+                }
+            }
+        });
+        
+        // Ensure button has proper type
+        newButton.setAttribute('type', 'button');
+        
+        // Add hover effect classes if not present
+        if (!newButton.className.includes('hover:text-gray-700')) {
+            newButton.className += ' hover:text-gray-700';
+        }
+    });
+}
+
     // Logout modal functions
     function openLogoutModal(event) {
         event.preventDefault();
@@ -1314,6 +1362,15 @@ document.querySelectorAll('.tab-link').forEach(link => {
         const tabId = this.getAttribute('data-tab');
         switchTab(tabId);
     });
+});
+
+// Event delegation for dynamically loaded modal close buttons
+document.addEventListener('click', function(e) {
+    // Check if the clicked element is the close button in password modal
+    if (e.target.closest('#passwordModalContent button[onclick*="closeModal"]') || 
+        e.target.closest('#passwordModalContent button[onclick*="closePasswordModal"]')) {
+        closePasswordModal();
+    }
 });
 
     // Form modal functions (keep existing form modal functions unchanged)
@@ -2193,12 +2250,32 @@ document.getElementById('passwordModal').addEventListener('click', function(e) {
     }
 });
 
+// Close password modal when clicking outside
+document.getElementById('passwordModal').addEventListener('click', function(e) {
+    if (e.target.id === 'passwordModal') {
+        closePasswordModal();
+    }
+});
+
     // Handle window resize
     window.addEventListener('resize', function() {
         if (window.innerWidth > 1024) {
             closeMobileMenu();
         }
     });
+
+    // Listen for messages from password modal
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'passwordChangeSuccess') {
+        // Show success message (you can add this similar to profile update)
+        alert(event.data.message);
+        closePasswordModal();
+    }
+    
+    if (event.data === 'closePasswordModal') {
+        closePasswordModal();
+    }
+});
 
     // Listen for messages from password modal
 window.addEventListener('message', function(event) {
@@ -2424,6 +2501,8 @@ function prePopulateProfileForm() {
     });
 }
 
+
+
 // Tab persistence functionality
 function saveSelectedTab(tabId) {
     localStorage.setItem('selectedTab', tabId);
@@ -2492,6 +2571,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
+// Password modal functions
 function openPasswordModal() {
     const modal = document.getElementById('passwordModal');
     const modalContent = document.getElementById('passwordModalContent');
@@ -2508,40 +2588,82 @@ function openPasswordModal() {
     })
     .then(response => response.text())
     .then(html => {
-        // Extract the form content from the HTML
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        // Get the form element
-        const form = doc.querySelector('form');
-        if (form) {
-            // Remove any scripts that might redirect
-            const scripts = form.querySelectorAll('script');
-            scripts.forEach(script => {
-                if (script.textContent.includes('header("Location:') || 
-                    script.textContent.includes('window.location') ||
-                    script.textContent.includes('redirectToLogin')) {
-                    script.remove();
-                }
-            });
-
-            // Update form to use AJAX submission
-            form.setAttribute('onsubmit', 'submitPasswordForm(event)');
-
-            modalContent.innerHTML = form.outerHTML;
-        } else {
-            // Try to get the entire body content as fallback
-            const bodyContent = doc.body.innerHTML;
-            modalContent.innerHTML = bodyContent;
-        }
+        modalContent.innerHTML = html;
     })
     .catch(error => {
         console.error('Error loading password form:', error);
-        modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Error loading password form. Please check the console for details.</div>';
+        modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Error loading password form</div>';
     });
 
     // Show modal
     modal.classList.remove('hidden');
+}
+
+function closePasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    modal.classList.add('hidden');
+}
+
+function submitPasswordForm(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    // Show loading state
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Changing...';
+    submitBtn.disabled = true;
+    
+    // Use AJAX to submit the form
+    fetch('change_password.php', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            alert(data.message);
+            
+            // Close modal after 1.5 seconds
+            setTimeout(() => {
+                closePasswordModal();
+            }, 1500);
+        } else {
+            // Show error message in modal
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4';
+            errorDiv.innerHTML = `<div class="flex items-center"><i class="bi bi-exclamation-circle mr-2"></i>${data.message}</div>`;
+            
+            // Insert error message at the top of modal content
+            const modalContent = document.getElementById('passwordModalContent');
+            modalContent.insertBefore(errorDiv, modalContent.firstChild);
+            
+            // Restore button state
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error changing password:', error);
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4';
+        errorDiv.innerHTML = '<div class="flex items-center"><i class="bi bi-exclamation-circle mr-2"></i>An error occurred. Please try again.</div>';
+        
+        const modalContent = document.getElementById('passwordModalContent');
+        modalContent.insertBefore(errorDiv, modalContent.firstChild);
+        
+        // Restore button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
 }
 
     </script>

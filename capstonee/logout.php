@@ -34,8 +34,21 @@ if (ini_get("session.use_cookies")) {
         $params["secure"], $params["httponly"]
     );
 }
-
-// Redirect to login page
-header("Location: index.php");
-exit();
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <script>
+        // Clear the saved tab from localStorage
+        localStorage.removeItem('selectedTab');
+        
+        // Redirect to login page
+        window.location.href = 'index.php';
+    </script>
+</body>
+</html>
+<?php exit(); ?>
