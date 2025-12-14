@@ -423,6 +423,50 @@ function getActivityBg($activity_type) {
     min-height: 0;
 }
 
+/* FIX: Full-screen iframe styles */
+.fullscreen-iframe-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.fullscreen-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Ensure iframe takes full space */
+.tab-panel > .bg-white {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+}
+
+#verification-content,
+#consult-content {
+    position: relative;
+}
+
+#verification-content > .bg-white,
+#consult-content > .bg-white {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+
     </style>
 </head>
 <body class="bg-maroon-light">
@@ -469,12 +513,16 @@ function getActivityBg($activity_type) {
                 <i class="bi bi-people-fill"></i>
                 <span>Patients</span>
             </a>
-            <a href="#submissions" class="tab-link" data-tab="submissions">
-                <i class="bi bi-clipboard-check"></i>
-                <span>Submissions</span>
+            <a href="#verification" class="tab-link" data-tab="verification">
+                <i class="bi bi-shield-check"></i>
+                <span>Verification</span>
                 <?php if ($pending_verifications > 0): ?>
                     <span class="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full pulse-badge"><?php echo $pending_verifications; ?></span>
                 <?php endif; ?>
+            </a>
+            <a href="#consult" class="tab-link" data-tab="consult">
+                <i class="bi bi-clipboard-check"></i>
+                <span>Consult</span>
             </a>
             <a href="#analytics" class="tab-link" data-tab="analytics">
                 <i class="bi bi-bar-chart-line"></i>
@@ -579,7 +627,7 @@ function getActivityBg($activity_type) {
                                 <p class="text-maroon-light">You have <strong><?php echo $pending_verifications; ?></strong> submission(s) waiting for verification.</p>
                             </div>
                         </div>
-                        <a href="#submissions" onclick="switchTab('submissions')" class="maroon-gradient-button text-white font-semibold px-6 py-3 rounded-lg shadow transition">
+                        <a href="#verification" onclick="switchTab('verification')" class="maroon-gradient-button text-white font-semibold px-6 py-3 rounded-lg shadow transition">
                             <i class="bi bi-shield-check mr-2"></i>Review Now
                         </a>
                     </div>
@@ -614,7 +662,7 @@ function getActivityBg($activity_type) {
                             <i class="bi bi-clipboard-check text-4xl opacity-80"></i>
                         </div>
                         <div class="mt-4">
-                            <a href="#submissions" onclick="switchTab('submissions')" class="text-white text-sm font-medium hover:underline flex items-center">
+                            <a href="#consult" onclick="switchTab('consult')" class="text-white text-sm font-medium hover:underline flex items-center">
                                 View Submissions <i class="bi bi-arrow-right ml-1"></i>
                             </a>
                         </div>
@@ -630,7 +678,7 @@ function getActivityBg($activity_type) {
                             <i class="bi bi-shield-exclamation text-4xl opacity-80"></i>
                         </div>
                         <div class="mt-4">
-                            <a href="#submissions" onclick="switchTab('submissions')" class="text-white text-sm font-medium hover:underline flex items-center">
+                            <a href="#verification" onclick="switchTab('verification')" class="text-white text-sm font-medium hover:underline flex items-center">
                                 Verify Now <i class="bi bi-arrow-right ml-1"></i>
                             </a>
                         </div>
@@ -744,11 +792,12 @@ function getActivityBg($activity_type) {
                     </div>
                 </div>
             </div>
+
 <!-- Patients Tab -->
-<div id="patients-content" class="tab-panel hidden">
-    <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1">
+<div id="patients-content" class="tab-panel hidden" style="display: none !important;">
+    <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full">
         <!-- Loading indicator -->
-        <div id="patients-loading" class="h-full flex items-center justify-center">
+        <div id="patients-loading" class="h-full flex items-center justify-center" style="display: none;">
             <div class="text-center">
                 <div class="spinner-border text-maroon" role="status">
                     <span class="sr-only">Loading...</span>
@@ -758,19 +807,19 @@ function getActivityBg($activity_type) {
         </div>
         
         <!-- Content container -->
-        <div id="patients-iframe-container" class="hidden h-full">
+        <div id="patients-iframe-container" class="hidden h-full" style="display: none;">
             <iframe 
                 id="patients-iframe"
-                src="modules/records/patients.php"
+                src=""
                 frameborder="0"
                 class="w-full h-full"
-                style="border: none;"
+                style="border: none; display: none;"
                 onload="hidePatientsLoading()"
             ></iframe>
         </div>
         
         <!-- Fallback content if iframe fails -->
-        <div id="patients-fallback" class="hidden h-full flex items-center justify-center">
+        <div id="patients-fallback" class="hidden h-full flex items-center justify-center" style="display: none;">
             <div class="text-center p-6">
                 <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
                     <i class="bi bi-people-fill text-maroon"></i> Patient Management
@@ -787,72 +836,31 @@ function getActivityBg($activity_type) {
     </div>
 </div>
 
-            <!-- Submissions Tab -->
-            <div id="submissions-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-clipboard-check text-maroon"></i> Form Submissions
-                    </h2>
-                    <p class="text-gray-600 mb-6">Verify and manage submitted forms</p>
-                    
-                    <?php if ($pending_verifications > 0): ?>
-                    <div class="maroon-gradient-alert p-4 mb-6 rounded-lg shadow-md border-l-4 border-maroon">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <i class="bi bi-exclamation-triangle text-maroon text-2xl"></i>
-                                <div>
-                                    <h3 class="text-lg font-bold text-maroon">Action Required</h3>
-                                    <p class="text-maroon-light">You have <strong><?php echo $pending_verifications; ?></strong> submission(s) waiting for verification.</p>
-                                </div>
-                            </div>
-                            <a href="modules/records/verify_submission.php" class="maroon-gradient-button text-white font-semibold px-6 py-3 rounded-lg shadow transition">
-                                <i class="bi bi-shield-check mr-2"></i>Review All
-                            </a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <a href="modules/records/submissions.php?type=history_form" class="bg-maroon-light border border-maroon rounded-xl p-6 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02]">
-                            <div class="flex items-center justify-center mb-4">
-                                <i class="bi bi-clipboard2-pulse-fill text-4xl text-maroon"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2 text-gray-800">History Forms</h3>
-                            <p class="text-2xl font-bold text-center text-maroon"><?php echo $total_history_forms; ?></p>
-                            <p class="text-sm opacity-90 text-center text-gray-600">Medical History for Athletes</p>
-                        </a>
-
-                        <a href="modules/records/submissions.php?type=dental_exam" class="bg-maroon-light border border-maroon rounded-xl p-6 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02]">
-                            <div class="flex items-center justify-center mb-4">
-                                <i class="fas fa-tooth text-4xl text-maroon"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2 text-gray-800">Dental Exams</h3>
-                            <p class="text-2xl font-bold text-center text-maroon"><?php echo $total_dental_exams; ?></p>
-                            <p class="text-sm opacity-90 text-center text-gray-600">Dental Examination Forms</p>
-                        </a>
-
-                        <a href="modules/records/submissions.php?type=medical_exam" class="bg-maroon-light border border-maroon rounded-xl p-6 shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-[1.02]">
-                            <div class="flex items-center justify-center mb-4">
-                                <i class="bi bi-heart-pulse text-4xl text-maroon"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2 text-gray-800">Medical Exams</h3>
-                            <p class="text-2xl font-bold text-center text-maroon"><?php echo $total_medical_exams; ?></p>
-                            <p class="text-sm opacity-90 text-center text-gray-600">Pre-Employment/OJT Exams</p>
-                        </a>
-                    </div>
-                    
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="modules/records/verify_submission.php" class="flex-1 maroon-gradient-button text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all text-center">
-                            <i class="bi bi-shield-check mr-2"></i> Verify Submissions
-                        </a>
-                        <a href="modules/records/submissions.php" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all text-center">
-                            <i class="bi bi-list-check mr-2"></i> View All Submissions
-                        </a>
-                    </div>
+            <!-- Verification Tab -->
+            <div id="verification-content" class="tab-panel hidden">
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
+                    <iframe 
+                        src="modules/records/verify_submission.php" 
+                        frameborder="0" 
+                        class="w-full h-full fullscreen-iframe"
+                        style="border: none;"
+                    ></iframe>
                 </div>
             </div>
 
-            <!-- Analytics Tab -->
+            <!-- Consult Tab -->
+            <div id="consult-content" class="tab-panel hidden">
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
+                    <iframe 
+                        src="modules/records/submissions.php" 
+                        frameborder="0" 
+                        class="w-full h-full fullscreen-iframe"
+                        style="border: none;"
+                    ></iframe>
+                </div>
+            </div>
+
+                       <!-- Analytics Tab -->
             <div id="analytics-content" class="tab-panel hidden">
                 <div class="bg-white rounded-xl shadow-md p-6">
                     <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
@@ -861,12 +869,12 @@ function getActivityBg($activity_type) {
                     <p class="text-gray-600 mb-6">View clinic statistics and reports</p>
                     
                     <div class="mb-8">
-                        <a href="modules/analytics/analytics_dashboard.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-bar-chart"></i> Go to Analytics Dashboard
-                        </a>
+                        <button onclick="openAnalyticsDashboard()" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
+                            <i class="bi bi-bar-chart"></i> Open Analytics Dashboard
+                        </button>
                     </div>
                     
-                    <!-- Summary Stats -->
+                    <!-- Summary Stats (keep this visible as a preview) -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                         <div class="bg-maroon-light border border-maroon rounded-xl p-4">
                             <h3 class="text-sm font-semibold text-gray-600 mb-2">Total Patients</h3>
@@ -1088,7 +1096,9 @@ function getActivityBg($activity_type) {
 
     <script>
     // Tab switching functionality
-    function switchTab(tabId) {
+  function switchTab(tabId) {
+    console.log('Switching to tab:', tabId);
+    
     // Update tab links
     document.querySelectorAll('.tab-link').forEach(link => {
         link.classList.remove('active');
@@ -1097,29 +1107,27 @@ function getActivityBg($activity_type) {
         }
     });
 
-    // Update tab content
+    // Hide all tab panels
     document.querySelectorAll('.tab-panel').forEach(panel => {
         panel.classList.add('hidden');
-        panel.classList.remove('active');
+        panel.style.display = 'none';
     });
 
+    // Show the active tab panel
     const activePanel = document.getElementById(tabId + '-content');
     if (activePanel) {
         activePanel.classList.remove('hidden');
-        activePanel.classList.add('active');
+        activePanel.style.display = 'flex';
         
         // Special handling for patients tab
         if (tabId === 'patients') {
-            // Delay loading slightly for smooth transition
-            setTimeout(() => {
-                loadPatientsContent();
-            }, 100);
+            console.log('Loading patients tab');
+            loadPatientsContent();
         }
         
-        // Special handling for other tabs that might need dynamic loading
-        if (tabId === 'submissions') {
-            // Refresh submission counts if needed
-            updateSubmissionCounts();
+        // Resize iframes when switching to verification or consult tabs
+        if (tabId === 'verification' || tabId === 'consult') {
+            setTimeout(resizeAllIframes, 100);
         }
     }
 
@@ -1368,56 +1376,132 @@ function getActivityBg($activity_type) {
         }, 2000);
     }
 
-    // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
-        updateTime();
-        setInterval(updateTime, 1000);
+    // Function to resize all iframes
+    function resizeAllIframes() {
+        // Resize verification iframe
+        const verificationIframe = document.querySelector('#verification-content iframe');
+        if (verificationIframe) {
+            resizeVerificationIframe(verificationIframe);
+        }
         
-        // Load saved tab
-        const savedTab = localStorage.getItem('nurseSelectedTab') || 'dashboard';
-        switchTab(savedTab);
+        // Resize consult iframe
+        const consultIframe = document.querySelector('#consult-content iframe');
+        if (consultIframe) {
+            resizeConsultIframe(consultIframe);
+        }
         
-        // Tab click handlers
-        document.querySelectorAll('.tab-link').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const tabId = this.getAttribute('data-tab');
-                switchTab(tabId);
-            });
-        });
-        
-        // Mobile menu button event
-        document.getElementById('mobileMenuBtn').addEventListener('click', toggleMobileMenu);
-        
-        // Close logout modal when clicking outside
-        document.getElementById('logoutModal').addEventListener('click', function(e) {
-            if (e.target.id === 'logoutModal') {
-                closeLogoutModal();
-            }
-        });
-        
-        // Close profile modal when clicking outside
-        document.getElementById('profileModal').addEventListener('click', function(e) {
-            if (e.target.id === 'profileModal') {
-                closeProfileModal();
-            }
-        });
-        
-        // Close password modal when clicking outside
-        document.getElementById('passwordModal').addEventListener('click', function(e) {
-            if (e.target.id === 'passwordModal') {
-                closePasswordModal();
-            }
-        });
-        
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 1024) {
-                closeMobileMenu();
-            }
-        });
+        // Resize patients iframe
+        const patientsIframe = document.getElementById('patients-iframe');
+        if (patientsIframe && patientsIframe.style.display !== 'none') {
+            resizeIframe(patientsIframe);
+        }
+    }
 
-        // Add iframe error handling
+    function resizeVerificationIframe(iframe) {
+        if (!iframe) return;
+        
+        const verificationContent = document.getElementById('verification-content');
+        if (!verificationContent) return;
+        
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - headerHeight - footerHeight;
+        
+        // Set iframe height
+        iframe.style.height = Math.max(600, availableHeight) + 'px';
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - headerHeight - footerHeight;
+            iframe.style.height = Math.max(600, newAvailableHeight) + 'px';
+        });
+    }
+
+    function resizeConsultIframe(iframe) {
+        if (!iframe) return;
+        
+        const consultContent = document.getElementById('consult-content');
+        if (!consultContent) return;
+        
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - headerHeight - footerHeight;
+        
+        // Set iframe height
+        iframe.style.height = Math.max(600, availableHeight) + 'px';
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - headerHeight - footerHeight;
+            iframe.style.height = Math.max(600, newAvailableHeight) + 'px';
+        });
+    }
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateTime();
+    setInterval(updateTime, 1000);
+    
+    // Load saved tab
+    const savedTab = localStorage.getItem('nurseSelectedTab') || 'dashboard';
+    console.log('Initial tab:', savedTab);
+    switchTab(savedTab);
+    
+    // Tab click handlers
+    document.querySelectorAll('.tab-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabId = this.getAttribute('data-tab');
+            switchTab(tabId);
+        });
+    });
+    
+    // Mobile menu button event
+    document.getElementById('mobileMenuBtn').addEventListener('click', toggleMobileMenu);
+    
+    // Close logout modal when clicking outside
+    document.getElementById('logoutModal').addEventListener('click', function(e) {
+        if (e.target.id === 'logoutModal') {
+            closeLogoutModal();
+        }
+    });
+    
+    // Close profile modal when clicking outside
+    document.getElementById('profileModal').addEventListener('click', function(e) {
+        if (e.target.id === 'profileModal') {
+            closeProfileModal();
+        }
+    });
+    
+    // Close password modal when clicking outside
+    document.getElementById('passwordModal').addEventListener('click', function(e) {
+        if (e.target.id === 'passwordModal') {
+            closePasswordModal();
+        }
+    });
+    
+    // Handle window resize
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 1024) {
+            closeMobileMenu();
+        }
+        // Resize iframes on window resize
+        resizeAllIframes();
+    });
+
+    // Add iframe error handling
     const iframe = document.getElementById('patients-iframe');
     if (iframe) {
         iframe.addEventListener('error', function() {
@@ -1428,100 +1512,169 @@ function getActivityBg($activity_type) {
         // Check if iframe loads successfully within 10 seconds
         setTimeout(() => {
             const loadingEl = document.getElementById('patients-loading');
-            if (!loadingEl.classList.contains('hidden')) {
+            if (loadingEl && !loadingEl.classList.contains('hidden')) {
                 showPatientsFallback();
             }
         }, 10000);
     }
-    });
+    
+    // Initial resize of iframes
+    setTimeout(resizeAllIframes, 500);
+});
 
-    // Patients tab loading functions
-let patientsIframeLoaded = false;
-
-function loadPatientsContent() {
+ function loadPatientsContent() {
+    console.log('Loading patients content');
+    
+    // Get elements
     const loadingEl = document.getElementById('patients-loading');
     const containerEl = document.getElementById('patients-iframe-container');
     const fallbackEl = document.getElementById('patients-fallback');
     const iframeEl = document.getElementById('patients-iframe');
     
-    // Only load iframe content once
-    if (!patientsIframeLoaded) {
-        // Show loading
+    // Show loading, hide others
+    if (loadingEl) {
+        loadingEl.style.display = 'flex';
         loadingEl.classList.remove('hidden');
+    }
+    if (containerEl) {
+        containerEl.style.display = 'none';
         containerEl.classList.add('hidden');
-        fallbackEl.classList.add('hidden');
-        
-        // Set flag to prevent multiple loads
-        patientsIframeLoaded = true;
-        
-        // Load the iframe content
-        iframeEl.src = "modules/records/patients.php";
-    } else {
-        // If already loaded, just show the iframe
-        loadingEl.classList.add('hidden');
-        containerEl.classList.remove('hidden');
+    }
+    if (fallbackEl) {
+        fallbackEl.style.display = 'none';
         fallbackEl.classList.add('hidden');
     }
+    if (iframeEl) {
+        iframeEl.style.display = 'none';
+        // Load the patients page
+        iframeEl.src = "modules/records/patients.php";
+    }
 }
-
 function hidePatientsLoading() {
+    console.log('Iframe loaded, hiding loading');
+    
     const loadingEl = document.getElementById('patients-loading');
     const containerEl = document.getElementById('patients-iframe-container');
+    const iframe = document.getElementById('patients-iframe');
     
-    loadingEl.classList.add('hidden');
-    containerEl.classList.remove('hidden');
+    if (loadingEl) {
+        loadingEl.style.display = 'none';
+        loadingEl.classList.add('hidden');
+    }
+    if (containerEl) {
+        containerEl.style.display = 'block';
+        containerEl.classList.remove('hidden');
+    }
+    if (iframe) {
+        iframe.style.display = 'block';
+        // Resize iframe to fit
+        resizeIframe(iframe);
+    }
 }
-
 function showPatientsFallback() {
     const loadingEl = document.getElementById('patients-loading');
     const containerEl = document.getElementById('patients-iframe-container');
     const fallbackEl = document.getElementById('patients-fallback');
     
-    loadingEl.classList.add('hidden');
-    containerEl.classList.add('hidden');
-    fallbackEl.classList.remove('hidden');
+    if (loadingEl) {
+        loadingEl.style.display = 'none';
+        loadingEl.classList.add('hidden');
+    }
+    if (containerEl) {
+        containerEl.style.display = 'none';
+        containerEl.classList.add('hidden');
+    }
+    if (fallbackEl) {
+        fallbackEl.style.display = 'flex';
+        fallbackEl.classList.remove('hidden');
+    }
 }
 
 function resizeIframe(iframe) {
+    if (!iframe) return;
+    
+    // Get the patients content container
+    const patientsContent = document.getElementById('patients-content');
+    if (!patientsContent) return;
+    
     // Calculate available height
     const header = document.querySelector('header');
     const footer = document.querySelector('.page-footer');
-    const tabNav = document.getElementById('tabNav');
     const mainContent = document.querySelector('.main-content');
     
     const headerHeight = header ? header.offsetHeight : 0;
     const footerHeight = footer ? footer.offsetHeight : 0;
-    const tabNavHeight = tabNav ? tabNav.offsetHeight : 0;
     const mainContentTop = mainContent ? mainContent.getBoundingClientRect().top : 0;
     
     // Calculate available height
     const windowHeight = window.innerHeight;
-    const availableHeight = windowHeight - mainContentTop - footerHeight - 40; // 40px buffer
+    const availableHeight = windowHeight - mainContentTop - footerHeight - 20; // 20px buffer
     
     // Set iframe height
     iframe.style.height = Math.max(500, availableHeight) + 'px';
+    console.log('Iframe resized to:', iframe.style.height);
     
     // Also resize on window resize
     window.addEventListener('resize', function() {
-        const newAvailableHeight = window.innerHeight - mainContentTop - footerHeight - 40;
+        const newAvailableHeight = window.innerHeight - mainContentTop - footerHeight - 20;
         iframe.style.height = Math.max(500, newAvailableHeight) + 'px';
     });
 }
 
-function hidePatientsLoading() {
-    const loadingEl = document.getElementById('patients-loading');
-    const containerEl = document.getElementById('patients-iframe-container');
+
+
+// Add this new function for analytics dashboard
+function openAnalyticsDashboard() {
+    // Replace the current analytics tab content with an iframe
+    const analyticsContent = document.getElementById('analytics-content');
     
-    loadingEl.classList.add('hidden');
-    containerEl.classList.remove('hidden');
+    // First, add a back button in the main content area (outside the iframe container)
+    const mainContentArea = document.querySelector('.main-content');
     
-    // Resize the iframe after it's shown
-    const iframe = document.getElementById('patients-iframe');
-    if (iframe) {
-        setTimeout(() => {
-            resizeIframe(iframe);
-        }, 100);
-    }
+    // Create back button container
+    const backButtonContainer = document.createElement('div');
+    backButtonContainer.className = 'mb-4';
+    backButtonContainer.innerHTML = `
+        <button onclick="goBackToAnalyticsTab()" 
+                class="inline-flex items-center gap-2 bg-white text-maroon font-semibold px-4 py-2 rounded-lg shadow hover:bg-gray-50 transition-all border border-gray-200">
+            <i class="bi bi-arrow-left-circle"></i> Back
+        </button>
+    `;
+    
+    // Insert the back button at the beginning of the main content area
+    mainContentArea.insertBefore(backButtonContainer, analyticsContent);
+    
+    // Then replace the analytics content with iframe
+    analyticsContent.innerHTML = `
+        <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
+            <iframe 
+                src="modules/analytics/analytics_dashboard.php" 
+                frameborder="0" 
+                class="w-full h-full fullscreen-iframe"
+                style="border: none;"
+            ></iframe>
+        </div>
+    `;
+    
+    // Resize the iframe to fit properly
+    setTimeout(() => {
+        const iframe = analyticsContent.querySelector('iframe');
+        if (iframe) {
+            const header = document.querySelector('header');
+            const footer = document.querySelector('.page-footer');
+            const headerHeight = header ? header.offsetHeight : 0;
+            const footerHeight = footer ? footer.offsetHeight : 0;
+            const windowHeight = window.innerHeight;
+            const availableHeight = windowHeight - headerHeight - footerHeight;
+            iframe.style.height = Math.max(600, availableHeight) + 'px';
+        }
+    }, 100);
+}
+
+// Function to go back to analytics tab (show the preview content)
+function goBackToAnalyticsTab() {
+    // Reload the page to go back to the original analytics tab content
+    location.reload();
 }
 
     </script>

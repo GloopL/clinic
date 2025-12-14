@@ -58,20 +58,10 @@ $is_certified = false;
 
 // ✅ NEW: Determine where the user came from for back button
 $referrer = $_SERVER['HTTP_REFERER'] ?? '';
-$back_url = $dashboard_url; // Default fallback
+$back_url = "../records/submissions.php"; // Default to submissions
 
-// Check if user came from submissions.php or verify_submission.php
-if (strpos($referrer, 'submissions.php') !== false) {
-    // User came from submissions.php - preserve the type filter
-    $parsed_url = parse_url($referrer);
-    if (isset($parsed_url['query'])) {
-        parse_str($parsed_url['query'], $query_params);
-        $back_type = $query_params['type'] ?? '';
-        $back_url = "../records/submissions.php" . ($back_type ? "?type=" . urlencode($back_type) : "");
-    } else {
-        $back_url = "../records/submissions.php";
-    }
-} elseif (strpos($referrer, 'verify_submission.php') !== false) {
+// Check if user came from verify_submission.php
+if (strpos($referrer, 'verify_submission.php') !== false) {
     // User came from verify_submission.php - preserve the type and id
     $parsed_url = parse_url($referrer);
     if (isset($parsed_url['query'])) {
@@ -83,8 +73,6 @@ if (strpos($referrer, 'submissions.php') !== false) {
         } else {
             $back_url = "../records/verify_submission.php" . ($back_type ? "?type=" . urlencode($back_type) : "");
         }
-    } else {
-        $back_url = "../records/verify_submission.php";
     }
 }
 
@@ -103,6 +91,11 @@ if (isset($_GET['from'])) {
             $back_url = "../records/verify_submission.php" . ($back_type ? "?type=" . urlencode($back_type) : "");
         }
     }
+}
+
+// If there's a type parameter, add it to the submissions URL
+if ($type) {
+    $back_url = "../records/submissions.php?type=" . urlencode($type);
 }
 
 // Map form types to their respective tables.
@@ -673,18 +666,18 @@ function render_editable_field($record, $field, $is_editable, $is_checkbox = fal
 
     if ($is_checkbox) {
         $checked_attr = $checkbox_status ? 'checked' : '';
-        return '<input type="checkbox" name="' . $field . '" value="1" class="mr-2 h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 ' . $editable_class . '" ' . $checked_attr . ' ' . $disabled_attr . '>';
+        return '<input type="checkbox" name="' . $field . '" value="1" class="mr-2 h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon ' . $editable_class . '" ' . $checked_attr . ' ' . $disabled_attr . '>';
     }
 
     if ($input_type === 'textarea') {
-        return '<textarea name="' . $field . '" rows="3" class="w-full rounded border border-orange-300 px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>' . $value . '</textarea>';
+        return '<textarea name="' . $field . '" rows="3" class="w-full rounded border border-maroon px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>' . $value . '</textarea>';
     }
 
     if ($input_type === 'date') {
-        return '<input type="date" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-orange-300 px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
+        return '<input type="date" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-maroon px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
     }
 
-    return '<input type="' . $input_type . '" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-orange-300 px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
+    return '<input type="' . $input_type . '" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-maroon px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
 }
 
 // Helper function for dental checkbox display/status
@@ -745,7 +738,7 @@ function buildDentalCheckboxPayload(array $fieldMap, array $source): string
 // Helper function for medical form fields
 function render_medical_field($record, $field, $label, $is_editable, $input_type = 'text') {
     echo '<div>';
-    echo '<label class="block font-medium mb-1 text-orange-700">' . $label . '</label>';
+    echo '<label class="block font-medium mb-1 text-maroon">' . $label . '</label>';
     echo render_editable_field($record, $field, $is_editable, false, $input_type);
     echo '</div>';
 }
@@ -758,10 +751,10 @@ function render_history_radio($record, $field, $is_editable) {
     
     $html = '<div class="flex gap-4">';
     $html .= '<label class="flex items-center gap-2">';
-    $html .= '<input type="radio" name="' . $field . '" value="1" class="h-4 w-4 text-orange-600 ' . $editable_class . '" ' . ($value ? 'checked' : '') . ' ' . $disabled_attr . '> Yes';
+    $html .= '<input type="radio" name="' . $field . '" value="1" class="h-4 w-4 text-maroon ' . $editable_class . '" ' . ($value ? 'checked' : '') . ' ' . $disabled_attr . '> Yes';
     $html .= '</label>';
     $html .= '<label class="flex items-center gap-2">';
-    $html .= '<input type="radio" name="' . $field . '" value="0" class="h-4 w-4 text-orange-600 ' . $editable_class . '" ' . (!$value ? 'checked' : '') . ' ' . $disabled_attr . '> No';
+    $html .= '<input type="radio" name="' . $field . '" value="0" class="h-4 w-4 text-maroon ' . $editable_class . '" ' . (!$value ? 'checked' : '') . ' ' . $disabled_attr . '> No';
     $html .= '</div>';
     
     return $html;
@@ -769,15 +762,14 @@ function render_history_radio($record, $field, $is_editable) {
 
 // Helper function for history form examination table rows
 function render_history_exam_row($record, $field_normal, $field_findings, $label, $is_editable) {
-    echo '<tr class="hover:bg-orange-50">';
-    echo '<td class="border border-orange-200 px-4 py-2 text-orange-700">' . $label . '</td>';
-    echo '<td class="border border-orange-200 px-4 py-2">';
+    echo '<tr class="hover:bg-maroon-50">';
+    echo '<td class="border border-maroon-200 px-4 py-2 text-maroon">' . $label . '</td>';
+    echo '<td class="border border-maroon-200 px-4 py-2">';
     echo render_editable_field($record, $field_findings, $is_editable);
     echo '</td>';
     echo '</tr>';
 }
 
-// Function to generate interactive dental chart visualization
 // Function to generate interactive dental chart visualization
 function generateDentalChartVisualization($dentalChartData) {
     // Always try to decode the data
@@ -833,7 +825,7 @@ function generateInteractiveDentalChart($chartData) {
         }
         
         .tooth.selected {
-            box-shadow: 0 0 0 2px #3b82f6;
+            box-shadow: 0 0 0 2px #800000;
         }
         
         .tooth-label {
@@ -866,45 +858,45 @@ function generateInteractiveDentalChart($chartData) {
 
     <div class="mb-6">
         <div class="flex justify-between items-center mb-3">
-            <h4 class="font-semibold text-orange-700">Interactive Dental Chart</h4>
+            <h4 class="font-semibold text-maroon">Interactive Dental Chart</h4>
             <div class="flex gap-2">
                 
             </div>
         </div>
         
         <!-- Dental Chart Controls -->
-        <div class="flex flex-wrap gap-4 mb-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+        <div class="flex flex-wrap gap-4 mb-4 p-4 bg-maroon-50 rounded-lg border border-maroon-200">
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 bg-red-500 rounded"></div>
-                <span class="text-sm font-medium text-orange-700">Caries (Cavity)</span>
+                <span class="text-sm font-medium text-maroon">Caries (Cavity)</span>
             </div>
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 bg-blue-500 rounded"></div>
-                <span class="text-sm font-medium text-orange-700">Filling</span>
+                <span class="text-sm font-medium text-maroon">Filling</span>
             </div>
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 bg-yellow-500 rounded"></div>
-                <span class="text-sm font-medium text-orange-700">Extraction Needed</span>
+                <span class="text-sm font-medium text-maroon">Extraction Needed</span>
             </div>
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 bg-green-500 rounded"></div>
-                <span class="text-sm font-medium text-orange-700">Healthy</span>
+                <span class="text-sm font-medium text-maroon">Healthy</span>
             </div>
             <div class="flex items-center gap-2">
                 <div class="w-3 h-3 bg-purple-500 rounded"></div>
-                <span class="text-sm font-medium text-orange-700">Crown/Bridge</span>
+                <span class="text-sm font-medium text-maroon">Crown/Bridge</span>
             </div>
             <div class="flex items-center gap-2 ml-4">
-                <div class="w-3 h-3 border-2 border-orange-500 bg-orange-100 rounded"></div>
-                <span class="text-sm font-medium text-orange-700">Click to change condition</span>
+                <div class="w-3 h-3 border-2 border-maroon bg-maroon-100 rounded"></div>
+                <span class="text-sm font-medium text-maroon">Click to change condition</span>
             </div>
         </div>
 
         <!-- Dental Chart Container -->
-        <div class="bg-white border-2 border-orange-200 rounded-xl p-6 mb-4">
+        <div class="bg-white border-2 border-maroon-200 rounded-xl p-6 mb-4">
             <!-- Maxillary (Upper) Teeth -->
             <div class="mb-8">
-                <h5 class="text-center font-semibold mb-4 text-orange-600 bg-orange-100 py-1 rounded">Maxillary (Upper Jaw)</h5>
+                <h5 class="text-center font-semibold mb-4 text-maroon bg-maroon-100 py-1 rounded">Maxillary (Upper Jaw)</h5>
                 <div class="grid grid-cols-16 gap-1 justify-center mb-2" id="maxillary-teeth">
                     ' . generateToothSection(1, 16, 'maxillary', $chartData) . '
                 </div>
@@ -912,7 +904,7 @@ function generateInteractiveDentalChart($chartData) {
 
             <!-- Mandibular (Lower) Teeth -->
             <div>
-                <h5 class="text-center font-semibold mb-4 text-orange-600 bg-orange-100 py-1 rounded">Mandibular (Lower Jaw)</h5>
+                <h5 class="text-center font-semibold mb-4 text-maroon bg-maroon-100 py-1 rounded">Mandibular (Lower Jaw)</h5>
                 <div class="grid grid-cols-16 gap-1 justify-center mb-2" id="mandibular-teeth">
                     ' . generateToothSection(17, 32, 'mandibular', $chartData) . '
                 </div>
@@ -958,7 +950,7 @@ function generateToothSection($start, $end, $jaw, $chartData) {
         
         $html .= '
             <div class="tooth-container flex flex-col items-center" data-tooth="' . $i . '">
-                <div class="tooth-number text-xs font-semibold text-orange-600 mb-1">' . $i . '</div>
+                <div class="tooth-number text-xs font-semibold text-maroon mb-1">' . $i . '</div>
                 <div class="tooth ' . ($isUpper ? 'tooth-upper' : 'tooth-lower') . ' 
                     w-8 h-12 border-2 border-gray-300 rounded-lg cursor-pointer transition-all duration-200 
                     hover:scale-110 hover:shadow-md ' . $initialColor . ' flex items-center justify-center"
@@ -1018,10 +1010,10 @@ function generateDentalSummary($chartData) {
     foreach ($conditions as $condition => $teeth) {
         $info = $conditionInfo[$condition] ?? ['color' => 'bg-gray-500', 'text' => ucfirst($condition)];
         $summaryHTML .= '
-            <div class="flex items-center gap-2 p-2 bg-white rounded border border-orange-200">
+            <div class="flex items-center gap-2 p-2 bg-white rounded border border-maroon-200">
                 <div class="w-3 h-3 rounded-full ' . $info['color'] . '"></div>
-                <span class="font-medium text-orange-700">' . $info['text'] . ':</span>
-                <span class="text-orange-600">Teeth ' . implode(', ', $teeth) . '</span>
+                <span class="font-medium text-maroon">' . $info['text'] . ':</span>
+                <span class="text-maroon">Teeth ' . implode(', ', $teeth) . '</span>
             </div>
         ';
     }
@@ -1159,21 +1151,21 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         $buttons[] = [
             'url' => "medical_diagnosis_form.php?patient_id=$patient_id&record_id=$record_id&type=$type&diagnosis_type=nurse",
             'text' => 'Nurse Diagnosis',
-            'color' => 'orange-gradient-button',
+            'color' => 'maroon-gradient-button',
             'icon' => 'bi bi-heart-pulse'
         ];
     } elseif ($user_role === 'dentist') {
         $buttons[] = [
             'url' => "medical_diagnosis_form.php?patient_id=$patient_id&record_id=$record_id&type=$type&diagnosis_type=dentist",
             'text' => 'Dental Diagnosis',
-            'color' => 'orange-gradient-button',
+            'color' => 'maroon-gradient-button',
             'icon' => 'bi bi-tooth'
         ];
     } elseif ($user_role === 'doctor' || $user_role === 'physician') {
         $buttons[] = [
             'url' => "medical_diagnosis_form.php?patient_id=$patient_id&record_id=$record_id&type=$type&diagnosis_type=doctor",
             'text' => 'Physician Diagnosis',
-            'color' => 'orange-gradient-button',
+            'color' => 'maroon-gradient-button',
             'icon' => 'bi bi-heart-pulse'
         ];
     } elseif ($user_role === 'admin' || $user_role === 'staff') {
@@ -1182,19 +1174,19 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             [
                 'url' => "medical_diagnosis_form.php?patient_id=$patient_id&record_id=$record_id&type=$type&diagnosis_type=nurse",
                 'text' => 'Nurse Diagnosis',
-                'color' => 'orange-gradient-button',
+                'color' => 'maroon-gradient-button',
                 'icon' => 'bi bi-heart-pulse'
             ],
             [
                 'url' => "medical_diagnosis_form.php?patient_id=$patient_id&record_id=$record_id&type=$type&diagnosis_type=dentist",
                 'text' => 'Dental Diagnosis',
-                'color' => 'orange-gradient-button',
+                'color' => 'maroon-gradient-button',
                 'icon' => 'bi bi-tooth'
             ],
             [
                 'url' => "medical_diagnosis_form.php?patient_id=$patient_id&record_id=$record_id&type=$type&diagnosis_type=doctor",
                 'text' => 'Physician Diagnosis',
-                'color' => 'orange-gradient-button',
+                'color' => 'maroon-gradient-button',
                 'icon' => 'bi bi-heart-pulse'
             ]
         ];
@@ -1210,49 +1202,134 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>View Record - BSU Clinic</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        @media print {
-            .no-print { display: none; }
-            body { background: white; }
+        /* Custom maroon theme (#800000) */
+        :root {
+            --maroon-primary: #800000;
+            --maroon-dark: #660000;
+            --maroon-light: #a00000;
+            --maroon-bg: #fff5f5;
         }
-        .nurse-editable {
-            background-color: #ffedd5 !important;
-            border: 1px dashed #ea580c !important;
+        
+        .maroon-gradient {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
+        
+        .maroon-gradient-light {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+        }
+        
+        .maroon-gradient-card {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        .maroon-gradient-button {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        .maroon-gradient-button:hover {
+            background: linear-gradient(135deg, var(--maroon-dark), var(--maroon-primary));
+        }
+        
+        .maroon-gradient-alert {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+            border-left-color: var(--maroon-primary);
+        }
+        
+        .maroon-table-header {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        .maroon-table-row {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+        }
+        
+        .maroon-table-row:hover {
+            background: linear-gradient(135deg, #ffe5e5, #ffcccc);
+        }
+        
+        .maroon-badge {
+            background: linear-gradient(135deg, #ffcccc, #ffb3b3);
+            color: #800000;
+        }
+        
+        .maroon-badge-verified {
+            background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+            color: #166534;
+        }
+        
+        .maroon-badge-pending {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+        }
+        
+        .maroon-badge-rejected {
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            color: #991b1b;
+        }
+        
+        .stats-card-1 {
+            background: linear-gradient(135deg, var(--maroon-primary), #990000);
+        }
+        
+        .stats-card-2 {
+            background: linear-gradient(135deg, #990000, #b30000);
+        }
+        
+        .stats-card-3 {
+            background: linear-gradient(135deg, #b30000, #cc0000);
+        }
+        
+        .stats-card-4 {
+            background: linear-gradient(135deg, #cc0000, #e60000);
+        }
+        
+        /* Text colors for maroon theme */
+        .text-maroon {
+            color: var(--maroon-primary);
+        }
+        
+        .text-maroon-light {
+            color: var(--maroon-light);
+        }
+        
+        .border-maroon {
+            border-color: var(--maroon-primary);
+        }
+        
+        .bg-maroon-light {
+            background-color: #fff5f5;
+        }
+        
+        /* Form sections */
         .exam-section {
-            border-left: 4px solid #ea580c;
-            background: #ffedd5;
+            border-left: 4px solid var(--maroon-primary);
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
+        
         .medical-section {
-            border-left: 4px solid #ea580c;
-            background: #ffedd5;
+            border-left: 4px solid var(--maroon-primary);
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
+        
         .history-section {
-            border-left: 4px solid #ea580c;
-            background: #ffedd5;
+            border-left: 4px solid var(--maroon-primary);
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
+        
         .dental-section {
-            border-left: 4px solid #ea580c;
-            background: #ffedd5;
+            border-left: 4px solid var(--maroon-primary);
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
-        /* Shared red-orange header gradient used on doctor pages */
-        .red-orange-gradient {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        
+        .certification-section {
+            border-left: 4px solid #10b981;
+            background: #d1fae5;
         }
-        .red-orange-gradient-button {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
-        }
-        .red-orange-gradient-button:hover {
-            background: linear-gradient(135deg, #b91c1c, #c2410c);
-        }
-        .orange-gradient-button {
-            background: linear-gradient(135deg, #ea580c, #f97316);
-        }
-        .orange-gradient-button:hover {
-            background: linear-gradient(135deg, #c2410c, #ea580c);
-        }
+        
         .diagnosis-badge-nurse { background-color: #3b82f6; }
         .diagnosis-badge-dentist { background-color: #10b981; }
         .diagnosis-badge-doctor { background-color: #ef4444; }
@@ -1260,32 +1337,31 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         .severity-moderate { background-color: #f59e0b; }
         .severity-severe { background-color: #ef4444; }
         .severity-critical { background-color: #7c3aed; }
-
-            .certification-section {
-            border-left: 4px solid #10b981;
-            background: #d1fae5;
+        
+        .nurse-editable {
+            background-color: #ffe5e5 !important;
+            border: 1px dashed var(--maroon-primary) !important;
+        }
+        
+        @media print {
+            .no-print { display: none; }
+            body { background: white; }
+        }
+        
+        /* Pulsing badge animation */
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .pulse-badge {
+            animation: pulse-badge 2s infinite;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-orange-50 to-red-50">
+<body class="bg-maroon-light">
 
-    <!-- HEADER (same style as other doctor records pages) -->
-    <header class="red-orange-gradient text-white shadow-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-            <div class="flex items-center gap-3">
-                <img src="../../assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-12 h-12 rounded-full object-cover border-4 border-white bg-white">
-                <h1 class="text-lg font-bold">BSU Clinic Record Management System</h1>
-            </div>
-            <nav class="flex items-center gap-6">
-                <a href="<?= $dashboard_url ?>" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </a>
-                <a href="../../logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </a>
-            </nav>
-        </div>
-    </header>
+   
 
 <div class="min-h-screen py-10 px-6">
     <div class="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-8">
@@ -1294,14 +1370,14 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             <div class="flex gap-2">
                 <!-- ✅ UPDATED BACK BUTTON - Dynamic based on where user came from -->
                 <a href="<?= htmlspecialchars($back_url) ?>"
-                   class="inline-flex items-center gap-2 red-orange-gradient-button text-white font-semibold px-4 py-2 rounded-lg shadow transition-all">
+                   class="inline-flex items-center gap-2 maroon-gradient-button text-white font-semibold px-4 py-2 rounded-lg shadow transition-all">
                    <i class="bi bi-arrow-left-circle"></i> Back
                 </a>
                 
             </div>
-            <h2 class="text-2xl font-bold text-orange-700">View Record Details</h2>
+            <h2 class="text-2xl font-bold text-maroon">View Record Details</h2>
             <?php if ($is_nurse): ?>
-                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-semibold">
+                <span class="bg-maroon-light text-maroon px-3 py-1 rounded-full text-sm font-semibold">
                     <i class="bi bi-shield-check"></i> <?= ucwords($user_role) ?> Mode
                 </span>
             <?php endif; ?>
@@ -1319,32 +1395,42 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             </div>
         <?php endif; ?>
 
-                <?php if ($record): ?>
-            <!-- Form Type Display -->
-            <div class="mb-6 no-print">
-                <div class="inline-block px-4 py-2 rounded-lg shadow font-semibold text-black 
-                    <?php 
-                    if ($type === 'history_form') echo 'bg-orange-500';
-                    elseif ($type === 'medical_form' || $type === 'medical_exam') echo 'bg-blue-500';
-                    elseif ($type === 'dental_form' || $type === 'dental_exam') echo 'bg-green-500';
-                    else echo 'bg-gray-500';
-                    ?>">
-                    <i class="bi bi-file-text mr-2"></i>
-                    <?php
-                    if ($type === 'history_form') echo 'MEDICAL HISTORY FORM';
-                    elseif ($type === 'medical_form' || $type === 'medical_exam') echo 'MEDICAL EXAMINATION FORM';
-                    elseif ($type === 'dental_form' || $type === 'dental_exam') echo 'DENTAL EXAMINATION FORM';
-                    else echo strtoupper(str_replace('_', ' ', $type));
-                    ?>
-                </div>
-            </div>
+        <?php if ($record): ?>
+     <!-- Form Type Display -->
+<div class="mb-6 no-print">
+    <div class="inline-block px-4 py-2 rounded-lg shadow font-semibold text-white 
+        <?php 
+        if ($type === 'history_form') {
+            echo 'bg-gray-700';
+        } elseif (in_array($type, ['medical_form', 'medical_exam'])) {
+            echo 'bg-[#800000]'; // Maroon color
+        } elseif (in_array($type, ['dental_form', 'dental_exam'])) {
+            echo 'bg-green-700';
+        } else {
+            echo 'bg-gray-700';
+        }
+        ?>">
+        <i class="bi bi-file-text mr-2"></i>
+        <?php
+        if ($type === 'history_form') {
+            echo 'MEDICAL HISTORY FORM';
+        } elseif (in_array($type, ['medical_form', 'medical_exam'])) {
+            echo 'MEDICAL EXAMINATION FORM';
+        } elseif (in_array($type, ['dental_form', 'dental_exam'])) {
+            echo 'DENTAL EXAMINATION FORM';
+        } else {
+            echo strtoupper(str_replace('_', ' ', $type));
+        }
+        ?>
+    </div>
+</div>
             
             <form method="POST" id="record-form">
                 <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
                 <input type="hidden" name="record_type" value="<?= $type; ?>">
                 
-                                <div class="bg-orange-50 rounded-lg p-4 mb-6 border-l-4 border-orange-500">
-                    <h3 class="font-semibold text-lg mb-3 text-orange-800">Patient Information (Record ID: <?= $record['record_id'] ?>)</h3>
+                <div class="bg-maroon-light rounded-lg p-4 mb-6 border-l-4 border-maroon">
+                    <h3 class="font-semibold text-lg mb-3 text-maroon">Patient Information (Record ID: <?= $record['record_id'] ?>)</h3>
                     
                     <?php if ($type === 'medical_form' || $type === 'medical_exam'): ?>
                         <!-- Medical Exam Patient Info Layout -->
@@ -1352,27 +1438,27 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <!-- Left Side -->
                             <div class="space-y-3">
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Last Name:</span>
+                                    <span class="font-semibold text-maroon w-32">Last Name:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['last_name']))); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">First Name:</span>
+                                    <span class="font-semibold text-maroon w-32">First Name:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name']))); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Middle Name:</span>
+                                    <span class="font-semibold text-maroon w-32">Middle Name:</span>
                                     <span class="text-gray-800"><?= !empty($record['middle_name']) ? htmlspecialchars(ucwords(strtolower($record['middle_name']))) : 'N/A'; ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Sex:</span>
+                                    <span class="font-semibold text-maroon w-32">Sex:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Cellphone No.:</span>
+                                    <span class="font-semibold text-maroon w-32">Cellphone No.:</span>
                                     <span class="text-gray-800"><?= !empty($record['contact_number']) ? htmlspecialchars($record['contact_number']) : 'N/A'; ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Address:</span>
+                                    <span class="font-semibold text-maroon w-32">Address:</span>
                                     <span class="text-gray-800"><?= !empty($record['address']) ? htmlspecialchars($record['address']) : 'N/A'; ?></span>
                                 </div>
                             </div>
@@ -1380,15 +1466,15 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <!-- Right Side -->
                             <div class="space-y-3">
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Date:</span>
+                                    <span class="font-semibold text-maroon w-32">Date:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['examination_date'] ?? date('Y-m-d')); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Birthday:</span>
+                                    <span class="font-semibold text-maroon w-32">Birthday:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['date_of_birth']); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Age:</span>
+                                    <span class="font-semibold text-maroon w-32">Age:</span>
                                     <span class="text-gray-800">
                                         <?php
                                         if (!empty($record['date_of_birth'])) {
@@ -1403,19 +1489,24 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                     </span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Civil Status:</span>
+                                    <span class="font-semibold text-maroon w-32">Civil Status:</span>
                                     <span class="text-gray-800"><?= !empty($record['civil_status']) ? htmlspecialchars(ucwords(strtolower($record['civil_status']))) : 'N/A'; ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Tel. No.:</span>
+                                    <span class="font-semibold text-maroon w-32">Tel. No.:</span>
                                     <span class="text-gray-800"><?= !empty($record['contact_number']) ? htmlspecialchars($record['contact_number']) : 'N/A'; ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Program:</span>
+                                    <span class="font-semibold text-maroon w-32">Program:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['program']); ?></span>
                                 </div>
                             </div>
-                        </div>
+                        <!-- END CERTIFICATION SECTION -->
+
+       
+    </div> <!-- This closes the medical-section div -->
+
+<?php elseif ($type === 'dental_form' || $type === 'dental_exam'): ?>
                         
                     <?php elseif ($type === 'dental_form' || $type === 'dental_exam'): ?>
                         <!-- Dental Exam Patient Info Layout -->
@@ -1423,15 +1514,15 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <!-- First Row -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-24">Name:</span>
+                                    <span class="font-semibold text-maroon w-24">Name:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-24">Program:</span>
+                                    <span class="font-semibold text-maroon w-24">Program:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['program']); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-24">SR Code:</span>
+                                    <span class="font-semibold text-maroon w-24">SR Code:</span>
                                     <span class="text-gray-800"><?= !empty($record['student_number']) ? htmlspecialchars($record['student_number']) : 'N/A'; ?></span>
                                 </div>
                             </div>
@@ -1439,11 +1530,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <!-- Second Row -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-24">Sex:</span>
+                                    <span class="font-semibold text-maroon w-24">Sex:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-24">Age:</span>
+                                    <span class="font-semibold text-maroon w-24">Age:</span>
                                     <span class="text-gray-800">
                                         <?php
                                         if (!empty($record['date_of_birth'])) {
@@ -1458,14 +1549,14 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                     </span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-24">Civil Status:</span>
+                                    <span class="font-semibold text-maroon w-24">Civil Status:</span>
                                     <span class="text-gray-800"><?= !empty($record['civil_status']) ? htmlspecialchars(ucwords(strtolower($record['civil_status']))) : 'N/A'; ?></span>
                                 </div>
                             </div>
                             
                             <!-- Third Row -->
                             <div class="flex items-start">
-                                <span class="font-semibold text-orange-700 w-24">Address:</span>
+                                <span class="font-semibold text-maroon w-24">Address:</span>
                                 <span class="text-gray-800"><?= !empty($record['address']) ? htmlspecialchars($record['address']) : 'N/A'; ?></span>
                             </div>
                         </div>
@@ -1476,15 +1567,15 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <!-- Left Side -->
                             <div class="space-y-3">
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Name:</span>
+                                    <span class="font-semibold text-maroon w-32">Name:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Year/Program:</span>
+                                    <span class="font-semibold text-maroon w-32">Year/Program:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['year_level'] . ' / ' . $record['program']); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Date of Birth:</span>
+                                    <span class="font-semibold text-maroon w-32">Date of Birth:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['date_of_birth']); ?></span>
                                 </div>
                             </div>
@@ -1492,15 +1583,15 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <!-- Right Side -->
                             <div class="space-y-3">
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Date of Examination:</span>
+                                    <span class="font-semibold text-maroon w-32">Date of Examination:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['examination_date'] ?? 'N/A') ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Sex:</span>
+                                    <span class="font-semibold text-maroon w-32">Sex:</span>
                                     <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
                                 </div>
                                 <div class="flex items-start">
-                                    <span class="font-semibold text-orange-700 w-32">Age:</span>
+                                    <span class="font-semibold text-maroon w-32">Age:</span>
                                     <span class="text-gray-800">
                                         <?php
                                         if (!empty($record['date_of_birth'])) {
@@ -1518,9 +1609,9 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         </div>
                         
                         <!-- Sports Event - Placed below all other fields -->
-<div class="pt-3 border-t border-orange-200 mt-2">
+<div class="pt-3 border-t border-maroon-200 mt-2">
     <div class="flex items-start">
-        <span class="font-semibold text-orange-700 w-32">Sports Event:</span>
+        <span class="font-semibold text-maroon w-32">Sports Event:</span>
         <span class="text-gray-800"><?= htmlspecialchars($record['sports_event'] ?? 'Not specified') ?></span>
         <!-- Hidden input to preserve sports_event value during form submission -->
         <input type="hidden" name="sports_event" value="<?= htmlspecialchars($record['sports_event'] ?? '') ?>">
@@ -1533,9 +1624,9 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
     <!-- Medical Examination Details -->
     <div class="medical-section rounded-lg p-4 mb-6">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="font-semibold text-lg text-orange-800">Medical Examination Details</h3>
+            <h3 class="font-semibold text-lg text-maroon">Medical Examination Details</h3>
             <?php if ($is_nurse): ?>
-                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-semibold">
+                <span class="bg-maroon-light text-maroon px-3 py-1 rounded-full text-sm font-semibold">
                     <i class="bi bi-pencil-square"></i> Editable by <?= ucwords($user_role) ?>
                 </span>
             <?php endif; ?>
@@ -1544,7 +1635,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         <!-- Examination Date -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-                <label class="block font-medium mb-1 text-orange-700">Examination Date</label>
+                <label class="block font-medium mb-1 text-maroon">Examination Date</label>
                 <?= render_editable_field($record, 'examination_date', $is_nurse, false, 'date') ?>
             </div>
         </div>
@@ -1552,118 +1643,118 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         <!-- Past Medical History, Family History, Occupational History -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
-                <label class="block font-medium mb-1 text-orange-700">Past Medical History</label>
+                <label class="block font-medium mb-1 text-maroon">Past Medical History</label>
                 <?= render_editable_field($record, 'past_medical_history', $is_nurse, false, 'textarea') ?>
             </div>
             <div>
-                <label class="block font-medium mb-1 text-orange-700">Family History</label>
+                <label class="block font-medium mb-1 text-maroon">Family History</label>
                 <?= render_editable_field($record, 'family_history', $is_nurse, false, 'textarea') ?>
             </div>
             <div>
-                <label class="block font-medium mb-1 text-orange-700">Occupational History</label>
+                <label class="block font-medium mb-1 text-maroon">Occupational History</label>
                 <?= render_editable_field($record, 'occupational_history', $is_nurse, false, 'textarea') ?>
             </div>
         </div>
 
         <!-- PHYSICAL EXAMINATION Table - FINDINGS ONLY -->
         <div class="mb-6">
-            <h4 class="font-semibold mb-3 text-orange-700">PHYSICAL EXAMINATION</h4>
+            <h4 class="font-semibold mb-3 text-maroon">PHYSICAL EXAMINATION</h4>
             <div class="overflow-x-auto">
-                <table class="min-w-full border-2 border-orange-400 rounded-lg overflow-hidden bg-white shadow mb-6">
+                <table class="min-w-full border-2 border-maroon rounded-lg overflow-hidden bg-white shadow mb-6">
                     <thead>
-                        <tr class="bg-orange-100">
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">REVIEW OF SYSTEM</th>
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">FINDINGS</th>
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">REVIEW OF SYSTEM</th>
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">FINDINGS</th>
+                        <tr class="bg-maroon-light">
+                            <th class="border border-maroon px-4 py-2 text-maroon">REVIEW OF SYSTEM</th>
+                            <th class="border border-maroon px-4 py-2 text-maroon">FINDINGS</th>
+                            <th class="border border-maroon px-4 py-2 text-maroon">REVIEW OF SYSTEM</th>
+                            <th class="border border-maroon px-4 py-2 text-maroon">FINDINGS</th>
                         </tr>
                     </thead>
                     <tbody>
                         <!-- Row 1 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">General Appearance/Body Built (BMI)</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">General Appearance/Body Built (BMI)</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'general_appearance_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Chest, Breast, Axilla</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Chest, Breast, Axilla</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'chest_breast_axilla_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 2 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Skin (Tattoo)</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Skin (Tattoo)</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'skin_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Heart</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Heart</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'heart_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 3 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Head and Scalp</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Head and Scalp</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'head_scalp_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Lungs</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Lungs</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'lungs_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 4 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Eyes (External)</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Eyes (External)</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'eyes_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Abdomen</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Abdomen</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'abdomen_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 5 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Ears (Piercing)</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Ears (Piercing)</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'ears_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Anus, Rectum</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Anus, Rectum</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'anus_rectum_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 6 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Nose and Throat</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Nose and Throat</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'nose_throat_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Genital</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Genital</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'genital_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 7 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Mouth</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Mouth</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'mouth_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Musculo-Skeletal</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Musculo-Skeletal</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'musculo_skeletal_findings', $is_nurse) ?>
                             </td>
                         </tr>
                         <!-- Row 8 -->
-                        <tr class="hover:bg-orange-50">
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Neck, Thyroid, LN</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                        <tr class="hover:bg-maroon-50">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Neck, Thyroid, LN</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'neck_thyroid_ln_findings', $is_nurse) ?>
                             </td>
-                            <td class="border border-orange-300 px-4 py-2 text-orange-700">Extremities</td>
-                            <td class="border border-orange-300 px-4 py-2">
+                            <td class="border border-maroon px-4 py-2 text-maroon">Extremities</td>
+                            <td class="border border-maroon px-4 py-2">
                                 <?= render_editable_field($record, 'extremities_findings', $is_nurse) ?>
                             </td>
                         </tr>
@@ -1674,7 +1765,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
 
         <!-- DIAGNOSTIC EXAMINATION - Fixed Layout -->
         <div class="mb-6">
-            <h4 class="font-semibold mb-3 text-orange-700">DIAGNOSTIC EXAMINATION</h4>
+            <h4 class="font-semibold mb-3 text-maroon">DIAGNOSTIC EXAMINATION</h4>
             
             <!-- Hidden fields for database storage -->
             <input type="hidden" name="chest_xray_normal" value="<?= $record['chest_xray_normal'] ?? 1 ?>">
@@ -1688,23 +1779,23 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                 <div class="space-y-6">
                     <!-- Blood Pressure -->
                     <div class="grid grid-cols-1 gap-1">
-                        <label class="block font-medium mb-1 text-orange-700">BLOOD PRESSURE</label>
+                        <label class="block font-medium mb-1 text-maroon">BLOOD PRESSURE</label>
                         <?= render_editable_field($record, 'blood_pressure', $is_nurse) ?>
                     </div>
                     
                     <!-- Heart Rate -->
                     <div class="grid grid-cols-1 gap-1">
-                        <label class="block font-medium mb-1 text-orange-700">HEART RATE</label>
+                        <label class="block font-medium mb-1 text-maroon">HEART RATE</label>
                         <?= render_editable_field($record, 'heart_rate', $is_nurse) ?>
                     </div>
                     
                     <!-- Hearing -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">HEARING</label>
+                        <label class="block font-medium mb-2 text-maroon">HEARING</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="hearing_status" value="normal" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (!isset($record['hearing_defective']) || $record['hearing_defective'] == 0) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="document.getElementsByName('hearing_defective')[0].checked = false;">
@@ -1712,7 +1803,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             </div>
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="hearing_status" value="defective" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (isset($record['hearing_defective']) && $record['hearing_defective'] == 1) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="document.getElementsByName('hearing_defective')[0].checked = true;">
@@ -1725,12 +1816,12 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     
                     <!-- Vision -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">VISION</label>
+                        <label class="block font-medium mb-2 text-maroon">VISION</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="space-y-3">
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="vision_status" value="with_glasses" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['vision_with_glasses']) && $record['vision_with_glasses'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="document.getElementsByName('vision_with_glasses')[0].checked = true; document.getElementsByName('vision_without_glasses')[0].checked = false;">
@@ -1738,7 +1829,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="vision_status" value="without_glasses" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['vision_without_glasses']) && $record['vision_without_glasses'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="document.getElementsByName('vision_with_glasses')[0].checked = false; document.getElementsByName('vision_without_glasses')[0].checked = true;">
@@ -1747,11 +1838,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             </div>
                             <div class="space-y-3">
                                 <div>
-                                    <label class="block text-sm mb-1 text-orange-600">R:</label>
+                                    <label class="block text-sm mb-1 text-maroon">R:</label>
                                     <?= render_editable_field($record, 'vision_right', $is_nurse) ?>
                                 </div>
                                 <div>
-                                    <label class="block text-sm mb-1 text-orange-600">L:</label>
+                                    <label class="block text-sm mb-1 text-maroon">L:</label>
                                     <?= render_editable_field($record, 'vision_left', $is_nurse) ?>
                                 </div>
                             </div>
@@ -1762,7 +1853,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     
                     <!-- Chest X-ray -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">CHEST X-RAY</label>
+                        <label class="block font-medium mb-2 text-maroon">CHEST X-RAY</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="space-y-3">
                                 <div class="flex items-center gap-2">
@@ -1777,7 +1868,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <div class="space-y-3">
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="chest_xray_status" value="normal" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (!isset($record['chest_xray_findings']) || $record['chest_xray_findings'] == 0) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="toggleFindingsTextarea('chest_xray_findings_text', false); document.getElementsByName('chest_xray_findings')[0].checked = false;">
@@ -1785,7 +1876,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <div class="flex items-center gap-2 mb-1">
                                     <input type="radio" name="chest_xray_status" value="findings" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['chest_xray_findings']) && $record['chest_xray_findings'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="toggleFindingsTextarea('chest_xray_findings_text', true); document.getElementsByName('chest_xray_findings')[0].checked = true;">
@@ -1793,7 +1884,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <input type="hidden" name="chest_xray_findings" value="<?= $record['chest_xray_findings'] ?? 0 ?>">
                                 <textarea name="chest_xray_findings_text" rows="3" 
-                                          class="w-full rounded border border-orange-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                          class="w-full rounded border border-maroon px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                           <?= !$is_nurse || (!isset($record['chest_xray_findings']) || $record['chest_xray_findings'] == 0) ? 'readonly' : '' ?>
                                           <?= !$is_nurse || (!isset($record['chest_xray_findings']) || $record['chest_xray_findings'] == 0) ? 'disabled' : '' ?>><?= htmlspecialchars($record['chest_xray_findings_text'] ?? '') ?></textarea>
                             </div>
@@ -1802,11 +1893,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     
                     <!-- Complete Blood Count -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">COMPLETE BLOOD COUNT</label>
+                        <label class="block font-medium mb-2 text-maroon">COMPLETE BLOOD COUNT</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="cbc_status" value="normal" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (!isset($record['cbc_findings']) || $record['cbc_findings'] == 0) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="toggleFindingsTextarea('cbc_findings_text', false); document.getElementsByName('cbc_findings')[0].checked = false;">
@@ -1815,7 +1906,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <div>
                                 <div class="flex items-center gap-2 mb-1">
                                     <input type="radio" name="cbc_status" value="findings" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['cbc_findings']) && $record['cbc_findings'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="toggleFindingsTextarea('cbc_findings_text', true); document.getElementsByName('cbc_findings')[0].checked = true;">
@@ -1823,7 +1914,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <input type="hidden" name="cbc_findings" value="<?= $record['cbc_findings'] ?? 0 ?>">
                                 <textarea name="cbc_findings_text" rows="3" 
-                                          class="w-full rounded border border-orange-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                          class="w-full rounded border border-maroon px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                           <?= !$is_nurse || (!isset($record['cbc_findings']) || $record['cbc_findings'] == 0) ? 'readonly' : '' ?>
                                           <?= !$is_nurse || (!isset($record['cbc_findings']) || $record['cbc_findings'] == 0) ? 'disabled' : '' ?>><?= htmlspecialchars($record['cbc_findings_text'] ?? '') ?></textarea>
                             </div>
@@ -1835,11 +1926,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                 <div class="space-y-6">
                     <!-- Routine Urinalysis -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">ROUTINE URINALYSIS</label>
+                        <label class="block font-medium mb-2 text-maroon">ROUTINE URINALYSIS</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="urinalysis_status" value="normal" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (!isset($record['urinalysis_findings']) || $record['urinalysis_findings'] == 0) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="toggleFindingsTextarea('urinalysis_findings_text', false); document.getElementsByName('urinalysis_findings')[0].checked = false;">
@@ -1848,7 +1939,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <div>
                                 <div class="flex items-center gap-2 mb-1">
                                     <input type="radio" name="urinalysis_status" value="findings" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['urinalysis_findings']) && $record['urinalysis_findings'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="toggleFindingsTextarea('urinalysis_findings_text', true); document.getElementsByName('urinalysis_findings')[0].checked = true;">
@@ -1856,7 +1947,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <input type="hidden" name="urinalysis_findings" value="<?= $record['urinalysis_findings'] ?? 0 ?>">
                                 <textarea name="urinalysis_findings_text" rows="3" 
-                                          class="w-full rounded border border-orange-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                          class="w-full rounded border border-maroon px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                           <?= !$is_nurse || (!isset($record['urinalysis_findings']) || $record['urinalysis_findings'] == 0) ? 'readonly' : '' ?>
                                           <?= !$is_nurse || (!isset($record['urinalysis_findings']) || $record['urinalysis_findings'] == 0) ? 'disabled' : '' ?>><?= htmlspecialchars($record['urinalysis_findings_text'] ?? '') ?></textarea>
                             </div>
@@ -1865,11 +1956,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     
                     <!-- Stool Examination -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">STOOL EXAMINATION</label>
+                        <label class="block font-medium mb-2 text-maroon">STOOL EXAMINATION</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="stool_status" value="normal" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (!isset($record['stool_findings']) || $record['stool_findings'] == 0) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="toggleFindingsTextarea('stool_findings_text', false); document.getElementsByName('stool_findings')[0].checked = false;">
@@ -1878,7 +1969,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <div>
                                 <div class="flex items-center gap-2 mb-1">
                                     <input type="radio" name="stool_status" value="findings" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (isset($record['stool_findings']) && $record['stool_findings'] == 1) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="toggleFindingsTextarea('stool_findings_text', true); document.getElementsByName('stool_findings')[0].checked = true;">
@@ -1886,7 +1977,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <input type="hidden" name="stool_findings" value="<?= $record['stool_findings'] ?? 0 ?>">
                                 <textarea name="stool_findings_text" rows="3" 
-                                          class="w-full rounded border border-orange-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                          class="w-full rounded border border-maroon px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                           <?= !$is_nurse || (!isset($record['stool_findings']) || $record['stool_findings'] == 0) ? 'readonly' : '' ?>
                                           <?= !$is_nurse || (!isset($record['stool_findings']) || $record['stool_findings'] == 0) ? 'disabled' : '' ?>><?= htmlspecialchars($record['stool_findings_text'] ?? '') ?></textarea>
                             </div>
@@ -1895,11 +1986,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     
                     <!-- Hepa B Screening -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">HEPA B SCREENING</label>
+                        <label class="block font-medium mb-2 text-maroon">HEPA B SCREENING</label>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="hepa_b_status" value="normal" 
-                                       class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                       class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                        <?= (!isset($record['hepa_b_findings']) || $record['hepa_b_findings'] == 0) ? 'checked' : '' ?>
                                        <?= !$is_nurse ? 'disabled' : '' ?>
                                        onchange="toggleFindingsTextarea('hepa_b_findings_text', false); document.getElementsByName('hepa_b_findings')[0].checked = false;">
@@ -1908,7 +1999,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <div>
                                 <div class="flex items-center gap-2 mb-1">
                                     <input type="radio" name="hepa_b_status" value="findings" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['hepa_b_findings']) && $record['hepa_b_findings'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="toggleFindingsTextarea('hepa_b_findings_text', true); document.getElementsByName('hepa_b_findings')[0].checked = true;">
@@ -1916,7 +2007,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <input type="hidden" name="hepa_b_findings" value="<?= $record['hepa_b_findings'] ?? 0 ?>">
                                 <textarea name="hepa_b_findings_text" rows="3" 
-                                          class="w-full rounded border border-orange-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                          class="w-full rounded border border-maroon px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                           <?= !$is_nurse || (!isset($record['hepa_b_findings']) || $record['hepa_b_findings'] == 0) ? 'readonly' : '' ?>
                                           <?= !$is_nurse || (!isset($record['hepa_b_findings']) || $record['hepa_b_findings'] == 0) ? 'disabled' : '' ?>><?= htmlspecialchars($record['hepa_b_findings_text'] ?? '') ?></textarea>
                             </div>
@@ -1925,15 +2016,15 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     
                     <!-- Drug Test -->
                     <div>
-                        <label class="block font-medium mb-2 text-orange-700">DRUG TEST</label>
+                        <label class="block font-medium mb-2 text-maroon">DRUG TEST</label>
                         
                         <!-- Methamphetamine -->
-                        <div class="mb-4 p-3 bg-orange-50 rounded border border-orange-200">
-                            <label class="block text-sm font-medium mb-2 text-orange-600">Methamphetamine</label>
+                        <div class="mb-4 p-3 bg-maroon-50 rounded border border-maroon-200">
+                            <label class="block text-sm font-medium mb-2 text-maroon">Methamphetamine</label>
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="methamphetamine_status" value="negative" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (!isset($record['methamphetamine_positive']) || $record['methamphetamine_positive'] == 0) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="document.getElementsByName('methamphetamine_negative')[0].checked = true; document.getElementsByName('methamphetamine_positive')[0].checked = false;">
@@ -1941,7 +2032,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="methamphetamine_status" value="positive" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['methamphetamine_positive']) && $record['methamphetamine_positive'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="document.getElementsByName('methamphetamine_negative')[0].checked = false; document.getElementsByName('methamphetamine_positive')[0].checked = true;">
@@ -1953,12 +2044,12 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         </div>
                         
                         <!-- Tetrahydrocannabinol -->
-                        <div class="p-3 bg-orange-50 rounded border border-orange-200">
-                            <label class="block text-sm font-medium mb-2 text-orange-600">Tetrahydrocannabinol</label>
+                        <div class="p-3 bg-maroon-50 rounded border border-maroon-200">
+                            <label class="block text-sm font-medium mb-2 text-maroon">Tetrahydrocannabinol</label>
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="thc_status" value="negative" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (!isset($record['thc_positive']) || $record['thc_positive'] == 0) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="document.getElementsByName('thc_negative')[0].checked = true; document.getElementsByName('thc_positive')[0].checked = false;">
@@ -1966,7 +2057,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <input type="radio" name="thc_status" value="positive" 
-                                           class="h-4 w-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>"
+                                           class="h-4 w-4 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>"
                                            <?= (isset($record['thc_positive']) && $record['thc_positive'] == 1) ? 'checked' : '' ?>
                                            <?= !$is_nurse ? 'disabled' : '' ?>
                                            onchange="document.getElementsByName('thc_negative')[0].checked = false; document.getElementsByName('thc_positive')[0].checked = true;">
@@ -2169,7 +2260,70 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
     </div>
 </div>
 <!-- END CERTIFICATION SECTION -->
+<!-- END CERTIFICATION SECTION -->
 
+        <!-- ACTION BUTTONS FOR MEDICAL FORM -->
+        <div class="mt-8 pt-6 border-t border-maroon-200 no-print">
+            <div class="flex justify-center gap-4 flex-wrap">
+                <?php if ($is_nurse): ?>
+                    <button type="submit" form="record-form" name="update_record"
+                            class="maroon-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
+                        <i class="bi bi-check-circle"></i> Update Record
+                    </button>
+                    <form method="POST" onsubmit="return confirm('Are you sure you want to delete this record? This action cannot be undone.');" class="inline">
+                        <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                        <input type="hidden" name="record_type" value="<?= $type; ?>">
+                        <button type="submit" name="delete"
+                                class="maroon-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
+                            <i class="bi bi-trash"></i> Delete Record
+                        </button>
+                    </form>
+                    
+                    <!-- Certification Button -->
+                    <?php if (!$is_certified): ?>
+                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                            <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
+                                <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                                <input type="hidden" name="record_type" value="<?= $type; ?>">
+                                <button type="submit" name="mark_for_certification"
+                                        class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                                    <i class="bi bi-award"></i> Submit for Certification
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                            <button type="button" disabled
+                                    class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
+                                <i class="bi bi-award-fill"></i> Already Submitted for Certification
+                            </button>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                <?php endif; ?>
+                
+                <!-- Doctor/Physician Certification -->
+                <?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
+                    <?php if ($is_certified): ?>
+                        <a href="generate_certified_pdf.php?type=<?= urlencode($type) ?>&id=<?= urlencode($id) ?>" 
+                           target="_blank"
+                           class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
+                            <i class="bi bi-printer"></i> Certified for Printing
+                        </a>
+                    <?php else: ?>
+                        <!-- Doctor/Physician can mark for certification themselves -->
+                        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
+                            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                            <input type="hidden" name="record_type" value="<?= $type; ?>">
+                            <button type="submit" name="mark_for_certification"
+                                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                                <i class="bi bi-award"></i> Submit for Certification
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+        <!-- END ACTION BUTTONS FOR MEDICAL FORM -->
 
     </div> <!-- This closes the medical-section div -->
 
@@ -2177,9 +2331,9 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
     <!-- Dental Examination Details -->
     <div class="dental-section rounded-lg p-4 mb-6">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="font-semibold text-lg text-orange-800">Dental Examination Details</h3>
+            <h3 class="font-semibold text-lg text-maroon">Dental Examination Details</h3>
             <?php if ($is_nurse): ?>
-                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-semibold">
+                <span class="bg-maroon-light text-maroon px-3 py-1 rounded-full text-sm font-semibold">
                     <i class="bi bi-pencil-square"></i> Editable by <?= ucwords($user_role) ?>
                 </span>
             <?php endif; ?>
@@ -2188,12 +2342,12 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
        
 
         <!-- Enhanced Dental Chart Visualization -->
-        <div class="mb-6 bg-white border-2 border-orange-200 rounded-xl p-6">
+        <div class="mb-6 bg-white border-2 border-maroon-200 rounded-xl p-6">
             <div class="flex justify-between items-center mb-4">
-                <h4 class="font-semibold text-orange-700 text-lg">Dental Chart Visualization</h4>
+                <h4 class="font-semibold text-maroon text-lg">Dental Chart Visualization</h4>
                 <?php if ($is_nurse): ?>
                     <button type="button" onclick="resetDentalChart()" 
-                            class="orange-gradient-button text-white px-3 py-1 rounded text-sm transition-colors">
+                            class="maroon-gradient-button text-white px-3 py-1 rounded text-sm transition-colors">
                         <i class="bi bi-arrow-clockwise"></i> Reset Chart
                     </button>
                 <?php endif; ?>
@@ -2206,14 +2360,14 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             
             <!-- Dental Chart Data Storage (for nurses to edit) -->
             <?php if ($is_nurse): ?>
-                <div class="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <div class="mt-4 p-4 bg-maroon-50 rounded-lg border border-maroon-200">
                     <div class="flex justify-between items-center mb-3">
-                        <label class="block font-medium text-orange-700">Dental Chart Data</label>
+                        <label class="block font-medium text-maroon">Dental Chart Data</label>
                         
                     </div>
                     
                     <!-- Formatted Display (Default) -->
-                    <div id="formatted-dental-data" class="bg-white rounded-lg p-4 border border-orange-200">
+                    <div id="formatted-dental-data" class="bg-white rounded-lg p-4 border border-maroon-200">
                         <?php 
                         // Try to get data from database first
                         $displayData = $dentalChartData;
@@ -2232,7 +2386,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     <!-- Raw JSON Textarea (Hidden by default) -->
                     <div id="raw-dental-data" class="hidden">
                         <textarea id="dental_chart_data" name="dental_chart_data" rows="6" 
-                                  class="w-full border border-orange-300 rounded-lg px-3 py-2 text-sm nurse-editable font-mono text-xs"
+                                  class="w-full border border-maroon rounded-lg px-3 py-2 text-sm nurse-editable font-mono text-xs"
                                   placeholder="Dental chart data in JSON format"><?= 
                                   !empty($dentalChartData) && $dentalChartData !== 'null' && $dentalChartData !== '""' ? 
                                   htmlspecialchars(json_encode(json_decode($dentalChartData, true), JSON_PRETTY_PRINT)) : '{}' ?></textarea>
@@ -2252,11 +2406,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-orange-50 p-3 rounded shadow-sm md:col-span-2">
-                <h4 class="font-semibold mb-3 text-orange-700 border-b border-orange-300 pb-1">Periodontal / Occlusion / Appliances</h4>
+            <div class="bg-maroon-50 p-3 rounded shadow-sm md:col-span-2">
+                <h4 class="font-semibold mb-3 text-maroon border-b border-maroon-300 pb-1">Periodontal / Occlusion / Appliances</h4>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <p class="font-medium text-sm mb-1 text-orange-600">Periodontal:</p>
+                        <p class="font-medium text-sm mb-1 text-maroon">Periodontal:</p>
                         <div class="space-y-1">
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_gingivitis', $is_nurse) ?> Gingivitis</label>
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_early_periodontitis', $is_nurse) ?> Early Periodontitis</label>
@@ -2265,7 +2419,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         </div>
                     </div>
                     <div>
-                        <p class="font-medium text-sm mb-1 text-orange-600">Occlusion & Appliances:</p>
+                        <p class="font-medium text-sm mb-1 text-maroon">Occlusion & Appliances:</p>
                         <div class="space-y-1">
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_class_molar', $is_nurse) ?> Occlusion Class Molar</label>
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_overjet', $is_nurse) ?> Overjet</label>
@@ -2277,8 +2431,8 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_appliance_others', $is_nurse) ?> Other Appliance</label>
                         </div>
                     </div>
-                    <div class="col-span-2 border-t border-orange-300 pt-2 mt-2">
-                        <p class="font-medium text-sm mb-1 text-orange-600">TMD Symptoms:</p>
+                    <div class="col-span-2 border-t border-maroon-300 pt-2 mt-2">
+                        <p class="font-medium text-sm mb-1 text-maroon">TMD Symptoms:</p>
                         <div class="grid grid-cols-4">
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_clenching', $is_nurse) ?> Clenching</label>
                             <label class="flex items-center text-sm"> <?= display_dental_status($record, 'is_clicking', $is_nurse) ?> Clicking</label>
@@ -2290,36 +2444,80 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             </div>
             
             <div class="md:col-span-3">
-                <label class="block font-medium mb-1 text-orange-700">Dentist's Remarks / Findings / Treatment Plan</label>
+                <label class="block font-medium mb-1 text-maroon">Dentist's Remarks / Findings / Treatment Plan</label>
                 <?= render_editable_field($record, 'remarks', $is_nurse, false, 'textarea') ?>
             </div>
             
             
         </div>
+        <!-- ACTION BUTTONS FOR DENTAL FORM -->
+    <div class="mt-8 pt-6 border-t border-maroon-200 no-print">
+        <div class="flex justify-center gap-4 flex-wrap">
+            <?php if ($is_nurse): ?>
+                <button type="submit" form="record-form" name="update_record"
+                        class="maroon-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
+                    <i class="bi bi-check-circle"></i> Update Record
+                </button>
+                <form method="POST" onsubmit="return confirm('Are you sure you want to delete this record? This action cannot be undone.');" class="inline">
+                    <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                    <input type="hidden" name="record_type" value="<?= $type; ?>">
+                    <button type="submit" name="delete"
+                            class="maroon-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
+                        <i class="bi bi-trash"></i> Delete Record
+                    </button>
+                </form>
+                
+                
+                
+                <!-- Mark as Completed Button for Dentists/Admins -->
+                <?php if (in_array($user_role, ['dentist', 'admin', 'staff'])): ?>
+                    <?php if ($record['verification_status'] !== 'completed'): ?>
+                        <form method="POST" onsubmit="return confirm('Mark this dental form as completed?');" class="inline">
+                            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                            <input type="hidden" name="record_type" value="<?= $type; ?>">
+                            <button type="submit" name="mark_as_completed"
+                                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                                <i class="bi bi-check-circle-fill"></i> Mark as Completed
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <button type="button" disabled
+                                class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
+                            <i class="bi bi-check-circle-fill"></i> Already Completed
+                        </button>
+                    <?php endif; ?>
+                <?php endif; ?>
+                
+            <?php endif; ?>
+            
+            
+        </div>
     </div>
+    <!-- END ACTION BUTTONS FOR DENTAL FORM -->
+</div> <!-- This closes the dental-section div -->
 
 <?php elseif ($type === 'history_form'): ?>
     <!-- Medical History Details -->
     <div class="history-section rounded-lg p-4 mb-6">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="font-semibold text-lg text-orange-800">Medical History Details</h3>
+            <h3 class="font-semibold text-lg text-maroon">Medical History Details</h3>
             <?php if ($is_nurse): ?>
-                <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-semibold">
+                <span class="bg-maroon-light text-maroon px-3 py-1 rounded-full text-sm font-semibold">
                     <i class="bi bi-pencil-square"></i> Editable by <?= ucwords($user_role) ?>
                 </span>
             <?php endif; ?>
         </div>
 
         <!-- Physical Examination Tables -->
-        <h4 class="font-semibold mb-3 text-orange-700">Physical Examination</h4>
+        <h4 class="font-semibold mb-3 text-maroon">Physical Examination</h4>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <!-- Left Table -->
             <div class="overflow-x-auto">
-                <table class="min-w-full border-2 border-orange-400 rounded-lg overflow-hidden mb-6 bg-white shadow">
+                <table class="min-w-full border-2 border-maroon rounded-lg overflow-hidden mb-6 bg-white shadow">
                     <thead>
-                        <tr class="bg-orange-100">
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">REVIEW OF SYSTEM</th>
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">FINDINGS</th>
+                        <tr class="bg-maroon-light">
+                            <th class="border border-maroon px-4 py-2 text-maroon">REVIEW OF SYSTEM</th>
+                            <th class="border border-maroon px-4 py-2 text-maroon">FINDINGS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2342,11 +2540,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             
             <!-- Right Table -->
             <div class="overflow-x-auto">
-                <table class="min-w-full border-2 border-orange-400 rounded-lg overflow-hidden mb-6 bg-white shadow">
+                <table class="min-w-full border-2 border-maroon rounded-lg overflow-hidden mb-6 bg-white shadow">
                     <thead>
-                        <tr class="bg-orange-100">
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">REVIEW OF SYSTEM</th>
-                            <th class="border border-orange-300 px-4 py-2 text-orange-700">FINDINGS</th>
+                        <tr class="bg-maroon-light">
+                            <th class="border border-maroon px-4 py-2 text-maroon">REVIEW OF SYSTEM</th>
+                            <th class="border border-maroon px-4 py-2 text-maroon">FINDINGS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2369,146 +2567,146 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         </div>
 
         <!-- General Questions -->
-        <h4 class="font-semibold mb-3 text-orange-700">General Questions</h4>
+        <h4 class="font-semibold mb-3 text-maroon">General Questions</h4>
         <div class="overflow-x-auto mb-6">
-            <table class="min-w-full border-2 border-orange-400 rounded-lg overflow-hidden bg-white shadow">
+            <table class="min-w-full border-2 border-maroon rounded-lg overflow-hidden bg-white shadow">
                 <thead>
-                    <tr class="bg-orange-100">
-                        <th class="border border-orange-300 px-4 py-2 text-orange-700">Check the following for your answers:</th>
-                        <th class="border border-orange-300 px-4 py-2 text-orange-700">Yes</th>
-                        <th class="border border-orange-300 px-4 py-2 text-orange-700">No</th>
+                    <tr class="bg-maroon-light">
+                        <th class="border border-maroon px-4 py-2 text-maroon">Check the following for your answers:</th>
+                        <th class="border border-maroon px-4 py-2 text-maroon">Yes</th>
+                        <th class="border border-maroon px-4 py-2 text-maroon">No</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">1. Have you been denied or restricted your participation in sports activities</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="denied_participation" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['denied_participation']) && $record['denied_participation'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">1. Have you been denied or restricted your participation in sports activities</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="denied_participation" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['denied_participation']) && $record['denied_participation'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="denied_participation" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['denied_participation']) && $record['denied_participation'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="denied_participation" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['denied_participation']) && $record['denied_participation'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td colspan="3" class="border border-orange-300 px-4 py-2 text-orange-700">
+                    <tr class="hover:bg-maroon-50">
+                        <td colspan="3" class="border border-maroon px-4 py-2 text-maroon">
                             &nbsp;&nbsp;&nbsp;&nbsp;Do you have any of the following conditions:
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700 pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a. Asthma</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="asthma" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['asthma']) && $record['asthma'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a. Asthma</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="asthma" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['asthma']) && $record['asthma'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="asthma" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['asthma']) && $record['asthma'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                    </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700 pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b. Seizure disorder</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="seizure_disorder" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['seizure_disorder']) && $record['seizure_disorder'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="seizure_disorder" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['seizure_disorder']) && $record['seizure_disorder'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="asthma" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['asthma']) && $record['asthma'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700 pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c. Heart problem</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="heart_problem" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['heart_problem']) && $record['heart_problem'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b. Seizure disorder</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="seizure_disorder" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['seizure_disorder']) && $record['seizure_disorder'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="heart_problem" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['heart_problem']) && $record['heart_problem'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                    </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700 pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d. Diabetes</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="diabetes" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['diabetes']) && $record['diabetes'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="diabetes" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['diabetes']) && $record['diabetes'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="seizure_disorder" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['seizure_disorder']) && $record['seizure_disorder'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700 pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e. High Blood Pressure</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="high_blood_pressure" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['high_blood_pressure']) && $record['high_blood_pressure'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c. Heart problem</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="heart_problem" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['heart_problem']) && $record['heart_problem'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="high_blood_pressure" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['high_blood_pressure']) && $record['high_blood_pressure'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                    </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">2. Have you had any surgery?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="surgery_history" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['surgery_history']) && $record['surgery_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="surgery_history" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['surgery_history']) && $record['surgery_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="heart_problem" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['heart_problem']) && $record['heart_problem'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">3. Have you had any discomfort, chest pain or chest tightness in your chest during exercise?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="chest_pain" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['chest_pain']) && $record['chest_pain'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d. Diabetes</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="diabetes" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['diabetes']) && $record['diabetes'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="chest_pain" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['chest_pain']) && $record['chest_pain'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                    </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">4. Have you had any injury to the bones, muscle, ligament or tendon?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="injury_history" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['injury_history']) && $record['injury_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="injury_history" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['injury_history']) && $record['injury_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="diabetes" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['diabetes']) && $record['diabetes'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">5. Have you had any injury that requires x-ray, CT scan or MRI, brace, cast or crutches?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="xray_history" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['xray_history']) && $record['xray_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e. High Blood Pressure</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="high_blood_pressure" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['high_blood_pressure']) && $record['high_blood_pressure'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="xray_history" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['xray_history']) && $record['xray_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                    </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">6. Have you had any head injury or concussion?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="head_injury" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['head_injury']) && $record['head_injury'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="head_injury" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['head_injury']) && $record['head_injury'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="high_blood_pressure" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['high_blood_pressure']) && $record['high_blood_pressure'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">7. Do you have frequent muscle cramps when exercising?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="muscle_cramps" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['muscle_cramps']) && $record['muscle_cramps'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">2. Have you had any surgery?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="surgery_history" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['surgery_history']) && $record['surgery_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="muscle_cramps" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['muscle_cramps']) && $record['muscle_cramps'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                    </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">8. Have you had any problems with your eyes or vision?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="vision_problems" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['vision_problems']) && $record['vision_problems'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
-                        </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="vision_problems" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['vision_problems']) && $record['vision_problems'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="surgery_history" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['surgery_history']) && $record['surgery_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">9. Are you on a special diet or do you avoid certain types of foods?</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="special_diet" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['special_diet']) && $record['special_diet'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">3. Have you had any discomfort, chest pain or chest tightness in your chest during exercise?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="chest_pain" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['chest_pain']) && $record['chest_pain'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="special_diet" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['special_diet']) && $record['special_diet'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="chest_pain" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['chest_pain']) && $record['chest_pain'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">4. Have you had any injury to the bones, muscle, ligament or tendon?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="injury_history" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['injury_history']) && $record['injury_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="injury_history" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['injury_history']) && $record['injury_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">5. Have you had any injury that requires x-ray, CT scan or MRI, brace, cast or crutches?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="xray_history" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['xray_history']) && $record['xray_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="xray_history" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['xray_history']) && $record['xray_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">6. Have you had any head injury or concussion?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="head_injury" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['head_injury']) && $record['head_injury'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="head_injury" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['head_injury']) && $record['head_injury'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">7. Do you have frequent muscle cramps when exercising?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="muscle_cramps" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['muscle_cramps']) && $record['muscle_cramps'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="muscle_cramps" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['muscle_cramps']) && $record['muscle_cramps'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">8. Have you had any problems with your eyes or vision?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="vision_problems" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['vision_problems']) && $record['vision_problems'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="vision_problems" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['vision_problems']) && $record['vision_problems'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">9. Are you on a special diet or do you avoid certain types of foods?</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="special_diet" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['special_diet']) && $record['special_diet'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                        </td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="special_diet" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['special_diet']) && $record['special_diet'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
                 </tbody>
@@ -2518,28 +2716,28 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                 <!-- For Females Only Section - Only show if patient is female -->
         <?php if (isset($record['sex']) && strtolower($record['sex']) === 'female'): ?>
         <div class="female-only-section mt-4">
-            <h5 class="text-orange-600 font-bold">FOR FEMALES ONLY</h5>
-            <table class="min-w-full border-2 border-orange-400 rounded-lg overflow-hidden mb-6 bg-white shadow">
+            <h5 class="text-maroon font-bold">FOR FEMALES ONLY</h5>
+            <table class="min-w-full border-2 border-maroon rounded-lg overflow-hidden mb-6 bg-white shadow">
                 <thead>
-                    <tr class="bg-orange-100">
-                        <th class="border border-orange-300 px-4 py-2 text-orange-700">Check the following for your answers:</th>
-                        <th class="border border-orange-300 px-4 py-2 text-orange-700">Yes</th>
-                        <th class="border border-orange-300 px-4 py-2 text-orange-700">No</th>
+                    <tr class="bg-maroon-light">
+                        <th class="border border-maroon px-4 py-2 text-maroon">Check the following for your answers:</th>
+                        <th class="border border-maroon px-4 py-2 text-maroon">Yes</th>
+                        <th class="border border-maroon px-4 py-2 text-maroon">No</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">10. Have you ever had a menstrual period? (LMP)</td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="menstrual_history" value="1" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['menstrual_history']) && $record['menstrual_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse || strtolower($record['sex']) !== 'female' ? 'disabled' : '' ?>>
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">10. Have you ever had a menstrual period? (LMP)</td>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="menstrual_history" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['menstrual_history']) && $record['menstrual_history'] == 1) ? 'checked' : '' ?> <?= !$is_nurse || strtolower($record['sex']) !== 'female' ? 'disabled' : '' ?>>
                         </td>
-                        <td class="border border-orange-300 px-4 py-2 text-center">
-                            <input type="radio" name="menstrual_history" value="0" class="h-5 w-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500 <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['menstrual_history']) && $record['menstrual_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse || strtolower($record['sex']) !== 'female' ? 'disabled' : '' ?>>
+                        <td class="border border-maroon px-4 py-2 text-center">
+                            <input type="radio" name="menstrual_history" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['menstrual_history']) && $record['menstrual_history'] == 0) ? 'checked' : '' ?> <?= !$is_nurse || strtolower($record['sex']) !== 'female' ? 'disabled' : '' ?>>
                         </td>
                     </tr>
-                    <tr class="hover:bg-orange-50">
-                        <td class="border border-orange-300 px-4 py-2 text-orange-700">11. How old were you when you had your first menstrual period?</td>
-                        <td class="border border-orange-300 px-4 py-2" colspan="2">
+                    <tr class="hover:bg-maroon-50">
+                        <td class="border border-maroon px-4 py-2 text-maroon">11. How old were you when you had your first menstrual period?</td>
+                        <td class="border border-maroon px-4 py-2" colspan="2">
                             <?= render_editable_field($record, 'first_menstrual_age', $is_nurse, false, 'text', strtolower($record['sex']) !== 'female') ?>
                         </td>
                     </tr>
@@ -2644,7 +2842,72 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             </div>
         </div>
         <!-- END CERTIFICATION SECTION for History Form -->
-    </div>
+            <!-- END CERTIFICATION SECTION for History Form -->
+
+        <!-- ACTION BUTTONS FOR HISTORY FORM -->
+        <div class="mt-6 pt-6 border-t border-maroon-200 no-print">
+            <div class="flex justify-center gap-4 flex-wrap">
+                <?php if ($is_nurse): ?>
+                    <button type="submit" form="record-form" name="update_record"
+                            class="maroon-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
+                        <i class="bi bi-check-circle"></i> Update Record
+                    </button>
+                    <form method="POST" onsubmit="return confirm('Are you sure you want to delete this record? This action cannot be undone.');" class="inline">
+                        <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                        <input type="hidden" name="record_type" value="<?= $type; ?>">
+                        <button type="submit" name="delete"
+                                class="maroon-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
+                            <i class="bi bi-trash"></i> Delete Record
+                        </button>
+                    </form>
+                    
+                    <!-- Certification Button -->
+                    <?php if (!$is_certified): ?>
+                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                            <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
+                                <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                                <input type="hidden" name="record_type" value="<?= $type; ?>">
+                                <button type="submit" name="mark_for_certification"
+                                        class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                                    <i class="bi bi-award"></i> Submit for Certification
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                            <button type="button" disabled
+                                    class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
+                                <i class="bi bi-award-fill"></i> Already Submitted for Certification
+                            </button>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                <?php endif; ?>
+                
+                <!-- Doctor/Physician Certification -->
+                <?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
+                    <?php if ($is_certified): ?>
+                        <a href="generate_certified_pdf.php?type=<?= urlencode($type) ?>&id=<?= urlencode($id) ?>" 
+                           target="_blank"
+                           class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
+                            <i class="bi bi-printer"></i> Certified for Printing
+                        </a>
+                    <?php else: ?>
+                        <!-- Doctor/Physician can mark for certification themselves -->
+                        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
+                            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                            <input type="hidden" name="record_type" value="<?= $type; ?>">
+                            <button type="submit" name="mark_for_certification"
+                                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                                <i class="bi bi-award"></i> Submit for Certification
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+        <!-- END ACTION BUTTONS FOR HISTORY FORM -->
+
+    </div> <!-- This closes the history-section div -->
 
 
 
@@ -2655,89 +2918,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                               
             </form>
 
-            <div class="flex justify-center gap-4 no-print">
-    <?php if ($is_nurse): ?>
-        <button type="submit" form="record-form" name="update_record"
-                class="orange-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
-            <i class="bi bi-check-circle"></i> Update Record
-        </button>
-        <form method="POST" onsubmit="return confirm('Are you sure you want to delete this record? This action cannot be undone.');" class="inline">
-            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-            <input type="hidden" name="record_type" value="<?= $type; ?>">
-            <button type="submit" name="delete"
-                    class="red-orange-gradient-button text-white px-6 py-2 rounded-lg shadow font-semibold hover:shadow-lg transition-all">
-                <i class="bi bi-trash"></i> Delete Record
-            </button>
-        </form>
-        
-                <!-- Certification Button -->
-<?php if (!$is_certified): ?>
-    <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
-        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
-            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-            <input type="hidden" name="record_type" value="<?= $type; ?>">
-            <button type="submit" name="mark_for_certification"
-                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
-                <i class="bi bi-award"></i> Mark for Certification
-            </button>
-        </form>
-    <?php endif; ?>
-<?php else: ?>
-    <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
-        <button type="button" disabled
-                class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
-            <i class="bi bi-award-fill"></i> Already Marked for Certification
-        </button>
-    <?php endif; ?>
-<?php endif; ?>
     
-<!-- Add this RIGHT BEFORE the closing </div> tag of the button section -->
-<?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
-    <?php if ($is_certified): ?>
-        <a href="generate_certified_pdf.php?type=<?= urlencode($type) ?>&id=<?= urlencode($id) ?>" 
-           target="_blank"
-           class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
-            <i class="bi bi-printer"></i> Certified for Printing
-        </a>
-    <?php else: ?>
-        <!-- Doctor/Physician can mark for certification themselves -->
-        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
-            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-            <input type="hidden" name="record_type" value="<?= $type; ?>">
-            <button type="submit" name="mark_for_certification"
-                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
-                <i class="bi bi-award"></i> Mark for Certification
-            </button>
-        </form>
-    <?php endif; ?>
-<?php endif; ?>
-
-<!-- Complete Button for Dental Forms -->
-<?php if (($type === 'dental_form' || $type === 'dental_exam') && ($user_role === 'dentist' || $user_role === 'admin' || $user_role === 'staff')): ?>
-    <?php if ($record['verification_status'] !== 'completed'): ?>
-        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this dental form as completed? This will finalize the form.');" class="inline">
-            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-            <input type="hidden" name="record_type" value="<?= $type; ?>">
-            <button type="submit" name="mark_as_completed"
-                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-teal-600 hover:shadow-lg transition-all">
-                <i class="bi bi-check-circle-fill"></i> Mark as Completed
-            </button>
-        </form>
-    <?php else: ?>
-        <button type="button" disabled
-                class="bg-green-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
-            <i class="bi bi-check-circle-fill"></i> Already Completed
-        </button>
-    <?php endif; ?>
-<?php endif; ?>
-
-</div> <!-- This is the closing </div> of the button section -->
-
-        <?php else: ?>
-            <p class="text-center text-orange-600 mt-8">No record details available.</p>
-        <?php endif; ?>
-    </div>
-</div>
+    
+   
+    
+</div> <!-- This closes the min-h-screen py-10 px-6 container -->
 
 <script>
 function refreshPage() {
@@ -2805,10 +2990,11 @@ function formatDentalChartDataForDisplay(chartData) {
     });
     
     if (Object.keys(conditions).length === 0) {
-        return '<div class="text-center py-4 text-gray-500">All teeth are healthy or no conditions marked.</div>';
+        return 'All teeth are healthy or no conditions marked.';
     }
     
-    // Condition info mapping
+    let html = '<div class="space-y-3">';
+    
     const conditionInfo = {
         'healthy': {color: 'bg-green-100', border: 'border-green-300', textColor: 'text-green-800', icon: '✓'},
         'caries': {color: 'bg-red-100', border: 'border-red-300', textColor: 'text-red-800', icon: '⚠'},
@@ -2816,8 +3002,6 @@ function formatDentalChartDataForDisplay(chartData) {
         'extraction': {color: 'bg-yellow-100', border: 'border-yellow-300', textColor: 'text-yellow-800', icon: '✕'},
         'crown': {color: 'bg-purple-100', border: 'border-purple-300', textColor: 'text-purple-800', icon: '◈'}
     };
-    
-    let html = '<div class="space-y-3">';
     
     Object.keys(conditions).forEach(condition => {
         const data = conditions[condition];
@@ -3251,5 +3435,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ?>
 });
 </script>
+
+
 </body>
 </html>

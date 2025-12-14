@@ -2,13 +2,11 @@
 session_start();
 include '../../config/database.php';
 
-
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../../login.php");
     exit();
 }
-
 
 // Determine dashboard URL based on role
 $dashboard_url = '../../dashboard.php';
@@ -24,7 +22,6 @@ if (isset($_SESSION['role'])) {
     }
 }
 
-
 $success_message = '';
 $error_message = '';
 $type = $_GET['type'] ?? '';
@@ -32,25 +29,20 @@ $id = $_GET['id'] ?? '';
 $record = null;
 $records = null;
 
-
 // Get current user role
 $user_role = $_SESSION['role'] ?? 'user';
-
 
 // ✅ Map both "form" and "exam" types to real table names
 $form_map = [
     'history_form' => ['table' => 'history_forms', 'record_type' => 'history_form'],
     'history_exam' => ['table' => 'history_forms', 'record_type' => 'history_form'],
 
-
     'medical_form' => ['table' => 'medical_exams', 'record_type' => 'medical_exam'],
     'medical_exam' => ['table' => 'medical_exams', 'record_type' => 'medical_exam'],
-
 
     'dental_form'  => ['table' => 'dental_exams', 'record_type' => 'dental_exam'],
     'dental_exam'  => ['table' => 'dental_exams', 'record_type' => 'dental_exam']
 ];
-
 
 // ✅ Define allowed record types for each role (what they can SEE in the list)
 $role_allowed_types = [
@@ -61,10 +53,8 @@ $role_allowed_types = [
     'admin' => ['history_form', 'medical_exam', 'dental_exam']  // Admin can see all
 ];
 
-
 // Get allowed types for current user (for viewing in list)
 $allowed_types = $role_allowed_types[$user_role] ?? [];
-
 
 // ✅ Handle Verify / Reject
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['record_id'], $_POST['record_type'])) {
@@ -72,17 +62,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['rec
     $record_type = $_POST['record_type'];
     $action = $_POST['action'];
 
-
     // ALLOW ALL ROLES TO VERIFY ANY FORM TYPE (no restrictions on verification)
     if (in_array($action, ['verified', 'rejected'])) {
         if (isset($form_map[$record_type])) {
             $table = $form_map[$record_type]['table'];
 
-
             // Update both main and specific form table
             $conn->query("UPDATE medical_records SET verification_status='$action' WHERE id='$record_id'");
             $conn->query("UPDATE $table SET verification_status='$action' WHERE record_id='$record_id'");
-
 
             $success_message = "Record #$record_id has been marked as " . strtoupper($action) . ".";
         } else {
@@ -90,7 +77,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'], $_POST['rec
         }
     }
 }
-
 
 // ✅ Fetch a single record (for detailed review)
 if ($type && $id) {
@@ -108,7 +94,6 @@ if ($type && $id) {
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $record = $stmt->get_result()->fetch_assoc();
-
 
         if (!$record) {
             $error_message = "No record found for this submission.";
@@ -133,7 +118,6 @@ if ($type && $id) {
         }
     }
 
-
     $records = $conn->query("
         SELECT mr.id, mr.record_type, mr.examination_date, mr.verification_status,
                p.first_name, p.last_name, p.student_id
@@ -154,128 +138,160 @@ if ($type && $id) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <link rel="icon" type="image/png" href="../../assets/css/images/logo-bsu.png">
     <style>
-        .red-orange-gradient {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        /* Custom maroon theme (#800000) to match nurse dashboard */
+        :root {
+            --maroon-primary: #800000;
+            --maroon-dark: #660000;
+            --maroon-light: #a00000;
+            --maroon-bg: #fff5f5;
         }
-       
-        .red-orange-gradient-light {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5, #fed7aa);
+        
+        .maroon-gradient {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
-       
-        .red-orange-gradient-button {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+        
+        .maroon-gradient-light {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
-       
-        .red-orange-gradient-button:hover {
-            background: linear-gradient(135deg, #b91c1c, #c2410c);
+        
+        .maroon-gradient-card {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
-       
-        .red-orange-alert {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
-            border-left-color: #ea580c;
+        
+        .maroon-gradient-button {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
-       
-        .red-orange-table-header {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+        
+        .maroon-gradient-button:hover {
+            background: linear-gradient(135deg, var(--maroon-dark), var(--maroon-primary));
         }
-       
-        .red-orange-table-row {
-            background: linear-gradient(135deg, #fef2f2, #ffedd5);
+        
+        .maroon-gradient-alert {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+            border-left-color: var(--maroon-primary);
         }
-       
-        .red-orange-table-row:hover {
-            background: linear-gradient(135deg, #fee2e2, #fed7aa);
+        
+        .maroon-table-header {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
-       
-        .red-orange-badge {
-            background: linear-gradient(135deg, #fecaca, #fed7aa);
-            color: #7c2d12;
+        
+        .maroon-table-row {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
-       
-        .red-orange-badge-verified {
+        
+        .maroon-table-row:hover {
+            background: linear-gradient(135deg, #ffe5e5, #ffcccc);
+        }
+        
+        .maroon-badge {
+            background: linear-gradient(135deg, #ffcccc, #ffb3b3);
+            color: #800000;
+        }
+        
+        .maroon-badge-verified {
             background: linear-gradient(135deg, #dcfce7, #bbf7d0);
             color: #166534;
         }
-       
-        .red-orange-badge-pending {
+        
+        .maroon-badge-pending {
             background: linear-gradient(135deg, #fef3c7, #fde68a);
             color: #92400e;
         }
-       
-        .red-orange-badge-rejected {
+        
+        .maroon-badge-rejected {
             background: linear-gradient(135deg, #fee2e2, #fecaca);
             color: #991b1b;
         }
-       
-        .filter-button {
-            background: linear-gradient(135deg, #ea580c, #f97316);
+        
+        .stats-card-1 {
+            background: linear-gradient(135deg, var(--maroon-primary), #990000);
         }
-       
-        .filter-button:hover {
-            background: linear-gradient(135deg, #c2410c, #ea580c);
+        
+        .stats-card-2 {
+            background: linear-gradient(135deg, #990000, #b30000);
         }
-       
+        
+        .stats-card-3 {
+            background: linear-gradient(135deg, #b30000, #cc0000);
+        }
+        
+        .stats-card-4 {
+            background: linear-gradient(135deg, #cc0000, #e60000);
+        }
+        
+        /* Text colors for maroon theme */
+        .text-maroon {
+            color: var(--maroon-primary);
+        }
+        
+        .text-maroon-light {
+            color: var(--maroon-light);
+        }
+        
+        .border-maroon {
+            border-color: var(--maroon-primary);
+        }
+        
+        .bg-maroon-light {
+            background-color: #fff5f5;
+        }
+        
+        /* Role badges */
         .role-badge {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: white;
         }
-       
+        
         .role-badge-nurse {
             background: linear-gradient(135deg, #ec4899, #be185d);
         }
-       
+        
         .role-badge-doctor {
             background: linear-gradient(135deg, #10b981, #047857);
         }
-       
+        
         .role-badge-dentist {
             background: linear-gradient(135deg, #f59e0b, #d97706);
         }
-       
+        
         .role-badge-staff {
             background: linear-gradient(135deg, #6b7280, #374151);
         }
+        
+        .filter-button {
+            background: linear-gradient(135deg, var(--maroon-light), #cc0000);
+        }
+        
+        .filter-button:hover {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        /* Pulsing badge animation */
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .pulse-badge {
+            animation: pulse-badge 2s infinite;
+        }
     </style>
 </head>
-<body class="bg-gradient-to-br from-orange-50 to-red-50">
+<body class="bg-gradient-to-br from-red-50 to-pink-50">
 
-
-    <!-- HEADER (same style as QR Scan / patient pages) -->
-    <header class="red-orange-gradient text-white shadow-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-            <div class="flex items-center gap-3">
-                <img src="../../assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-12 h-12 rounded-full object-cover border-4 border-white bg-white">
-                <h1 class="text-lg font-bold">BSU Clinic Record Management System</h1>
-            </div>
-            <nav class="flex items-center gap-6">
-                <a href="<?php echo $dashboard_url; ?>" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </a>
-                <a href="../../logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </a>
-            </nav>
-        </div>
-    </header>
-
-
-<div class="min-h-screen py-10 px-6 pt-20">
-    <div class="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-8">
+<div class="min-h-screen py-6 px-4 pt-2">
+    <div class="max-w-7xl mx-auto bg-white shadow-lg rounded-lg p-6">
        
-        <!-- Header -->
+        <!-- Header - Removed back button as requested -->
         <div class="flex justify-between items-center mb-6">
-            <a href="<?php echo $dashboard_url; ?>"
-               class="inline-flex items-center gap-2 red-orange-gradient-button text-white font-semibold px-4 py-2 rounded-lg shadow hover:shadow-lg transition-all">
-               <i class="bi bi-arrow-left-circle"></i> Back to Dashboard
-            </a>
-            <div class="text-right">
-                <h2 class="text-2xl font-bold text-orange-700">Verify Pending Submissions</h2>
+            <div>
+                <h2 class="text-2xl font-bold text-maroon">Verify Pending Submissions</h2>
                 <span class="px-3 py-1 rounded-full text-sm font-semibold mt-1 inline-block role-badge role-badge-<?= $user_role ?>">
                     <i class="bi bi-person-check"></i> <?= ucfirst($user_role) ?> Mode
                 </span>
             </div>
+            <!-- No back button as requested -->
         </div>
-
 
         <!-- Notifications -->
         <?php if ($success_message): ?>
@@ -288,12 +304,11 @@ if ($type && $id) {
             </div>
         <?php endif; ?>
 
-
         <!-- ✅ Single Record Review -->
         <?php if ($record): ?>
             <!-- Form Type Header -->
             <div class="mb-4">
-                <h3 class="text-2xl font-bold text-orange-700">
+                <h3 class="text-2xl font-bold text-maroon">
                     <?php
                     $formTypeDisplay = match($type) {
                         'history_form' => 'History Form',
@@ -307,8 +322,8 @@ if ($type && $id) {
                 <p class="text-gray-600">Submission ID: <?= htmlspecialchars($record['record_id']); ?></p>
             </div>
            
-            <div class="red-orange-alert rounded-lg p-4 mb-6 border-l-4 border-orange-500">
-                <h3 class="font-semibold text-lg mb-3 text-orange-800">Patient Information</h3>
+            <div class="maroon-gradient-alert rounded-lg p-4 mb-6 border-l-4 border-maroon">
+                <h3 class="font-semibold text-lg mb-3 text-maroon">Patient Information</h3>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <!-- Basic Patient Info Only -->
                     <p><strong>Student ID:</strong> <?= htmlspecialchars($record['student_id'] ?? '') ?></p>
@@ -319,7 +334,6 @@ if ($type && $id) {
                     <p><strong>Date of Birth:</strong> <?= htmlspecialchars($record['date_of_birth'] ?? '') ?></p>
                 </div>
             </div>
-
 
             <div class="bg-green-50 rounded-lg p-4 mb-6 border-l-4 border-green-500">
                 <h3 class="font-semibold text-lg mb-3 text-green-800">Form Summary</h3>
@@ -414,19 +428,17 @@ if ($type && $id) {
                 <div class="mt-4 pt-4 border-t">
                     <p class="font-medium text-gray-700">Current Status:</p>
                     <span class="px-3 py-1 rounded-full text-sm font-semibold mt-2 inline-block
-                        <?= $record['verification_status'] === 'verified' ? 'red-orange-badge-verified' :
-                            ($record['verification_status'] === 'rejected' ? 'red-orange-badge-rejected' : 'red-orange-badge-pending'); ?>">
+                        <?= $record['verification_status'] === 'verified' ? 'maroon-badge-verified' :
+                            ($record['verification_status'] === 'rejected' ? 'maroon-badge-rejected' : 'maroon-badge-pending'); ?>">
                         <?= strtoupper($record['verification_status']); ?>
                     </span>
                 </div>
             </div>
 
-
             <!-- ✅ Action Buttons - ALL ROLES CAN VERIFY ANY FORM -->
             <form method="POST" class="flex justify-center gap-4">
                 <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
                 <input type="hidden" name="record_type" value="<?= $type; ?>">
-
 
                 <?php if ($record['verification_status'] === 'pending'): ?>
                     <button type="submit" name="action" value="verified"
@@ -464,11 +476,10 @@ if ($type && $id) {
                 </a>
             </form>
 
-
         <!-- ✅ All Submissions List -->
         <?php else: ?>
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold text-orange-800">
+                <h3 class="text-xl font-semibold text-maroon">
                     <?= $type ? ucfirst(str_replace('_',' ', $type)) . ' Pending Submissions' : 'All Pending Submissions'; ?>
                     <span class="text-sm font-normal text-gray-600 ml-2">
                         <?php if ($records): ?>
@@ -494,11 +505,10 @@ if ($type && $id) {
                 </div>
             </div>
 
-
             <?php if ($records && $records->num_rows > 0): ?>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full border border-orange-200 text-sm rounded-lg overflow-hidden">
-                        <thead class="red-orange-table-header text-white">
+                    <table class="min-w-full border border-red-200 text-sm rounded-lg overflow-hidden">
+                        <thead class="maroon-table-header text-white">
                             <tr>
                                 <th class="py-3 px-4">Student ID</th>
                                 <th class="py-3 px-4">Name</th>
@@ -508,19 +518,19 @@ if ($type && $id) {
                                 <th class="py-3 px-4">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-orange-100">
+                        <tbody class="divide-y divide-red-100">
                             <?php while ($r = $records->fetch_assoc()): ?>
-                                <tr class="red-orange-table-row hover:shadow transition-all duration-200">
+                                <tr class="maroon-table-row hover:shadow transition-all duration-200">
                                     <td class="py-3 px-4 font-medium"><?= htmlspecialchars($r['student_id']); ?></td>
                                     <td class="py-3 px-4"><?= htmlspecialchars($r['last_name'] . ', ' . $r['first_name']); ?></td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
+                                        <span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium">
                                             <?= ucfirst(str_replace('_', ' ', $r['record_type'])); ?>
                                         </span>
                                     </td>
                                     <td class="py-3 px-4"><?= date('M j, Y', strtotime($r['examination_date'])); ?></td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-1 rounded-full text-xs font-semibold red-orange-badge-pending">
+                                        <span class="px-2 py-1 rounded-full text-xs font-semibold maroon-badge-pending">
                                             PENDING
                                         </span>
                                     </td>
@@ -535,7 +545,7 @@ if ($type && $id) {
                                         };
                                         ?>
                                         <a href="verify_submission.php?type=<?= $formType; ?>&id=<?= $r['id']; ?>"
-                                           class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
+                                           class="inline-flex items-center gap-1 px-3 py-1 maroon-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
                                            <i class="bi bi-eye"></i> Review & Verify
                                         </a>
                                     </td>
@@ -545,12 +555,11 @@ if ($type && $id) {
                     </table>
                 </div>
 
-
             <?php else: ?>
                 <div class="text-center py-8">
-                    <i class="bi bi-inbox text-4xl text-orange-400 mb-4"></i>
-                    <p class="text-orange-600 text-lg">No pending submissions found.</p>
-                    <p class="text-orange-500 text-sm mt-2">
+                    <i class="bi bi-inbox text-4xl text-red-400 mb-4"></i>
+                    <p class="text-red-600 text-lg">No pending submissions found.</p>
+                    <p class="text-red-500 text-sm mt-2">
                         <?php if ($type): ?>
                             No pending <?= str_replace('_', ' ', $type) ?> submissions found.
                         <?php else: ?>
@@ -563,9 +572,5 @@ if ($type && $id) {
     </div>
 </div>
 
-
 </body>
 </html>
-
-
-
