@@ -30,8 +30,8 @@ if (isset($_SESSION['username'])) {
     if ($result->num_rows > 0) {
         $patient_data = $result->fetch_assoc();
        
-        // Calculate age from date_of_birth if age is not set or empty
-        if (empty($patient_data['age']) && !empty($patient_data['date_of_birth'])) {
+        // Calculate age from date_of_birth
+        if (!empty($patient_data['date_of_birth'])) {
             $dob = new DateTime($patient_data['date_of_birth']);
             $now = new DateTime();
             $patient_data['age'] = $now->diff($dob)->y;
@@ -400,25 +400,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     </p>
                                 </div>
                                
-                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                                    <label class="block text-xs font-semibold text-orange-700">Cellphone No.</label>
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Cellphone No.</label>
                                     <input type="text"
                                            name="cellphone_no"
-                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                           value="<?php echo htmlspecialchars($patient_data['contact_number'] ?? ''); ?>">
-                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
-                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your cellphone number
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['contact_number'] ?? ''); ?>"
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['contact_number'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
                                     </p>
                                 </div>
                                
-                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                                    <label class="block text-xs font-semibold text-orange-700">Address</label>
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Address</label>
                                     <input type="text"
                                            name="address"
-                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                           value="<?php echo htmlspecialchars($patient_data['address'] ?? ''); ?>">
-                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
-                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your address
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['address'] ?? ''); ?>"
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['address'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
                                     </p>
                                 </div>
                             </div>
@@ -470,30 +480,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </div>
                            
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                                    <label class="block text-xs font-semibold text-orange-700">Civil Status</label>
-                                    <select name="civil_status"
-                                            class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                            required>
-                                        <option value="">Select Civil Status</option>
-                                        <option value="Single" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
-                                        <option value="Married" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Married') ? 'selected' : ''; ?>>Married</option>
-                                        <option value="Widowed" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Widowed') ? 'selected' : ''; ?>>Widowed</option>
-                                        <option value="Separated" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Separated') ? 'selected' : ''; ?>>Separated</option>
-                                        <option value="Divorced" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Divorced') ? 'selected' : ''; ?>>Divorced</option>
-                                    </select>
-                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
-                                        <i class="bi bi-pencil-square mr-1"></i> Please select your civil status
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Civil Status</label>
+                                    <input type="text"
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['civil_status'] ?? ''); ?>"
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['civil_status'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
                                     </p>
+                                    <input type="hidden" name="civil_status" value="<?php echo htmlspecialchars($patient_data['civil_status'] ?? ''); ?>">
                                 </div>
                                
-                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                                    <label class="block text-xs font-semibold text-orange-700">Tel. No.</label>
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label class="block text-xs font-semibold text-green-700">Tel. No.</label>
                                     <input type="text"
                                            name="tel_no"
-                                           class="w-full rounded border-2 border-orange-300 px-2 py-1 text-xs bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                                    <p class="text-xs text-orange-600 mt-1 flex items-center">
-                                        <i class="bi bi-pencil-square mr-1"></i> Please enter telephone number
+                                           class="w-full rounded border-2 border-green-300 px-2 py-1 text-xs bg-green-50 font-medium text-green-800"
+                                           value="<?php echo htmlspecialchars($patient_data['telephone_number'] ?? ''); ?>"
+                                           readonly>
+                                    <p class="text-xs text-green-600 mt-1 flex items-center">
+                                        <?php if (isset($patient_data['telephone_number'])): ?>
+                                            <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled
+                                        <?php else: ?>
+                                            <i class="bi bi-exclamation-triangle mr-1"></i> Not in database
+                                        <?php endif; ?>
                                     </p>
                                 </div>
                                
@@ -740,6 +755,3 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php endif; ?>
 </body>
 </html>
-
-
-

@@ -55,10 +55,24 @@ if (isset($_SESSION['username'])) {
             $patient_data['full_name_formatted'] = $patient_data['first_name_cap'] . 
                                                   (!empty($patient_data['middle_initial_cap']) ? ' ' . $patient_data['middle_initial_cap'] : '') . 
                                                   ' ' . $patient_data['last_name_cap'];
+            
+            // Get all fields from patients table
+            $patient_data['telephone_number'] = $patient_data['telephone_number'] ?? '';
+            $patient_data['civil_status'] = $patient_data['civil_status'] ?? '';
+            $patient_data['contact_number'] = $patient_data['contact_number'] ?? '';
+            $patient_data['address'] = $patient_data['address'] ?? '';
+            $patient_data['program'] = $patient_data['program'] ?? '';
+            $patient_data['year_level'] = $patient_data['year_level'] ?? '';
+            $patient_data['date_of_birth'] = $patient_data['date_of_birth'] ?? '';
+            $patient_data['sex'] = $patient_data['sex'] ?? '';
+            $patient_data['student_id'] = $patient_data['student_id'] ?? '';
         }
         $stmt->close();
     }
 }
+
+// Debug: Check what data we have
+error_log("Patient data civil_status: " . ($patient_data['civil_status'] ?? 'NULL'));
 
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -186,8 +200,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 }
-   
-
 ?>
 
 <!DOCTYPE html>
@@ -329,8 +341,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </style>
 </head>
 <body>
-   
-    
     <div class="bg-gray-100 min-h-screen py-8">
         <div class="max-w-5xl mx-auto px-4 mb-6 no-print">
             <a href="../user_dashboard.php" class="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition">
@@ -351,7 +361,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="alert alert-danger"><?php echo $error_message; ?></div>
                     <?php endif; ?>
                     <form id="userDentalForm" method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
-                        <!-- Hidden fields for auto-filled data -->
+                        <!-- Hidden fields for POST data -->
                         <input type="hidden" id="first_name" name="first_name" value="<?php echo isset($patient_data['first_name_cap']) ? htmlspecialchars($patient_data['first_name_cap']) : ''; ?>">
                         <input type="hidden" id="middle_name" name="middle_name" value="<?php echo isset($patient_data['middle_name']) ? htmlspecialchars(ucwords(strtolower($patient_data['middle_name']))) : ''; ?>">
                         <input type="hidden" id="last_name" name="last_name" value="<?php echo isset($patient_data['last_name_cap']) ? htmlspecialchars($patient_data['last_name_cap']) : ''; ?>">
@@ -388,12 +398,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                        id="program_display" 
                                        name="program" 
                                        value="<?php echo isset($patient_data['program']) ? htmlspecialchars($patient_data['program']) : ''; ?>" 
-                                       <?php echo isset($patient_data['program']) ? 'readonly' : 'required'; ?>>
+                                       readonly>
                                 <p class="text-xs text-green-600 mt-2 flex items-center">
                                     <?php if (isset($patient_data['program'])): ?>
                                         <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
                                     <?php else: ?>
-                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your program
+                                        <i class="bi bi-exclamation-triangle mr-1"></i> Please complete your registration
                                     <?php endif; ?>
                                 </p>
                             </div>
@@ -409,12 +419,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                        id="student_id" 
                                        name="student_id" 
                                        value="<?php echo isset($patient_data['student_id']) ? htmlspecialchars($patient_data['student_id']) : ''; ?>" 
-                                       <?php echo isset($patient_data['student_id']) ? 'readonly' : 'required'; ?>>
+                                       readonly>
                                 <p class="text-xs text-green-600 mt-2 flex items-center">
                                     <?php if (isset($patient_data['student_id'])): ?>
                                         <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
                                     <?php else: ?>
-                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your SR Code
+                                        <i class="bi bi-exclamation-triangle mr-1"></i> Please complete your registration
                                     <?php endif; ?>
                                 </p>
                             </div>
@@ -432,7 +442,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <?php if (isset($patient_data['sex'])): ?>
                                         <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
                                     <?php else: ?>
-                                        <i class="bi bi-pencil-square mr-1"></i> Please complete your registration
+                                        <i class="bi bi-exclamation-triangle mr-1"></i> Please complete your registration
                                     <?php endif; ?>
                                 </p>
                             </div>
@@ -452,64 +462,105 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <?php if (isset($patient_data['age'])): ?>
                                         <i class="bi bi-check-circle-fill mr-1"></i> Auto-calculated from your date of birth
                                     <?php else: ?>
-                                        <i class="bi bi-pencil-square mr-1"></i> Please complete your registration
+                                        <i class="bi bi-exclamation-triangle mr-1"></i> Please complete your registration
                                     <?php endif; ?>
                                 </p>
                             </div>
                             
-                            <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                                <label for="civil_status" class="block font-medium mb-2 text-orange-700">
+                            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <label for="civil_status" class="block font-medium mb-2 text-green-700">
                                     <i class="bi bi-person-heart mr-2"></i>Civil Status
                                 </label>
-                                <select class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
-                                        id="civil_status" 
-                                        name="civil_status" 
-                                        required>
-                                    <option value="">Select Civil Status</option>
-                                    <option value="Single" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
-                                    <option value="Married" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Married') ? 'selected' : ''; ?>>Married</option>
-                                    <option value="Widowed" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Widowed') ? 'selected' : ''; ?>>Widowed</option>
-                                    <option value="Separated" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Separated') ? 'selected' : ''; ?>>Separated</option>
-                                    <option value="Divorced" <?php echo (isset($patient_data['civil_status']) && $patient_data['civil_status'] == 'Divorced') ? 'selected' : ''; ?>>Divorced</option>
-                                </select>
-                                <p class="text-xs text-orange-600 mt-2 flex items-center">
-                                    <i class="bi bi-pencil-square mr-1"></i> Please select your civil status
+                                <input type="text" 
+                                       class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
+                                       id="civil_status" 
+                                       name="civil_status" 
+                                       value="<?php echo isset($patient_data['civil_status']) && !empty($patient_data['civil_status']) ? htmlspecialchars($patient_data['civil_status']) : 'Not specified'; ?>" 
+                                       readonly>
+                                <p class="text-xs text-green-600 mt-2 flex items-center">
+                                    <?php if (isset($patient_data['civil_status']) && !empty($patient_data['civil_status'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-exclamation-triangle mr-1"></i> Please complete your registration
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Contact Information -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="<?php echo isset($patient_data['telephone_number']) && !empty($patient_data['telephone_number']) ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'; ?> p-4 rounded-lg border-2">
+                                <label for="telephone_number" class="block font-medium mb-2 <?php echo isset($patient_data['telephone_number']) && !empty($patient_data['telephone_number']) ? 'text-green-700' : 'text-orange-700'; ?>">
+                                    <i class="bi bi-telephone-fill mr-2"></i>Telephone Number (Landline)
+                                </label>
+                                <input type="tel" 
+                                       class="w-full rounded border-2 <?php echo isset($patient_data['telephone_number']) && !empty($patient_data['telephone_number']) ? 'border-green-300 bg-green-50 text-green-800' : 'border-orange-300 bg-orange-50 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'; ?> px-3 py-2" 
+                                       id="telephone_number" 
+                                       name="telephone_number" 
+                                       value="<?php echo isset($patient_data['telephone_number']) ? htmlspecialchars($patient_data['telephone_number']) : ''; ?>"
+                                       <?php echo isset($patient_data['telephone_number']) && !empty($patient_data['telephone_number']) ? 'readonly' : ''; ?>
+                                       placeholder="Enter landline number">
+                                <p class="text-xs <?php echo isset($patient_data['telephone_number']) && !empty($patient_data['telephone_number']) ? 'text-green-600' : 'text-orange-600'; ?> mt-2 flex items-center">
+                                    <?php if (isset($patient_data['telephone_number']) && !empty($patient_data['telephone_number'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your telephone number
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            
+                            <div class="<?php echo isset($patient_data['contact_number']) && !empty($patient_data['contact_number']) ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'; ?> p-4 rounded-lg border-2">
+                                <label for="contact_number" class="block font-medium mb-2 <?php echo isset($patient_data['contact_number']) && !empty($patient_data['contact_number']) ? 'text-green-700' : 'text-orange-700'; ?>">
+                                    <i class="bi bi-phone-fill mr-2"></i>Cellphone Number
+                                </label>
+                                <input type="tel" 
+                                       class="w-full rounded border-2 <?php echo isset($patient_data['contact_number']) && !empty($patient_data['contact_number']) ? 'border-green-300 bg-green-50 text-green-800' : 'border-orange-300 bg-orange-50 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'; ?> px-3 py-2" 
+                                       id="contact_number" 
+                                       name="contact_number" 
+                                       value="<?php echo isset($patient_data['contact_number']) ? htmlspecialchars($patient_data['contact_number']) : ''; ?>"
+                                       <?php echo isset($patient_data['contact_number']) && !empty($patient_data['contact_number']) ? 'readonly' : ''; ?>
+                                       placeholder="Enter cellphone number">
+                                <p class="text-xs <?php echo isset($patient_data['contact_number']) && !empty($patient_data['contact_number']) ? 'text-green-600' : 'text-orange-600'; ?> mt-2 flex items-center">
+                                    <?php if (isset($patient_data['contact_number']) && !empty($patient_data['contact_number'])): ?>
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    <?php else: ?>
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your cellphone number
+                                    <?php endif; ?>
                                 </p>
                             </div>
                         </div>
 
                         <div class="mb-6">
-    <?php if (isset($patient_data['address']) && !empty($patient_data['address'])): ?>
-        <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
-            <label for="address" class="block font-medium mb-2 text-green-700">
-                <i class="bi bi-geo-alt mr-2"></i>Address
-            </label>
-            <textarea class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
-                      id="address" 
-                      name="address" 
-                      rows="3" 
-                      readonly><?php echo htmlspecialchars($patient_data['address']); ?></textarea>
-            <p class="text-xs text-green-600 mt-2 flex items-center">
-                <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
-            </p>
-        </div>
-    <?php else: ?>
-        <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-            <label for="address" class="block font-medium mb-2 text-orange-700">
-                <i class="bi bi-geo-alt mr-2"></i>Address
-            </label>
-            <textarea class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
-                      id="address" 
-                      name="address" 
-                      rows="3" 
-                      placeholder="Enter your complete address" 
-                      required></textarea>
-            <p class="text-xs text-orange-600 mt-2 flex items-center">
-                <i class="bi bi-pencil-square mr-1"></i> Please enter your complete address
-            </p>
-        </div>
-    <?php endif; ?>
-</div>
+                            <?php if (isset($patient_data['address']) && !empty($patient_data['address'])): ?>
+                                <div class="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                    <label for="address" class="block font-medium mb-2 text-green-700">
+                                        <i class="bi bi-geo-alt mr-2"></i>Address
+                                    </label>
+                                    <textarea class="w-full rounded border-2 border-green-300 px-3 py-2 bg-green-50 font-medium text-green-800" 
+                                              id="address" 
+                                              name="address" 
+                                              rows="3" 
+                                              readonly><?php echo htmlspecialchars($patient_data['address']); ?></textarea>
+                                    <p class="text-xs text-green-600 mt-2 flex items-center">
+                                        <i class="bi bi-check-circle-fill mr-1"></i> Auto-filled from your registration
+                                    </p>
+                                </div>
+                            <?php else: ?>
+                                <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                                    <label for="address" class="block font-medium mb-2 text-orange-700">
+                                        <i class="bi bi-geo-alt mr-2"></i>Address
+                                    </label>
+                                    <textarea class="w-full rounded border-2 border-orange-300 px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500" 
+                                              id="address" 
+                                              name="address" 
+                                              rows="3" 
+                                              placeholder="Enter your complete address"></textarea>
+                                    <p class="text-xs text-orange-600 mt-2 flex items-center">
+                                        <i class="bi bi-pencil-square mr-1"></i> Please enter your complete address
+                                    </p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
 
                         <!-- Information Legend -->
                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -726,33 +777,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="flex flex-col md:flex-row gap-4 justify-end mt-8">
                             <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition">Submit Form</button>
                         </div>
-                        </form>
-                    </div>
+                    </form>
                 </div>
             </div>
         </div>
-        
-        <!-- QR Code Modal -->
-        <div class="modal fade" id="qrCodeModal" tabindex="-1" aria-labelledby="qrCodeModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="qrCodeModalLabel">QR Code</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body text-center">
-                        <div id="qrcode"></div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="downloadQR">Download QR</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    
+    </div>
 
-    
     <script src="../../assets/js/jquery.min.js"></script>
     <script src="../../assets/js/bootstrap.bundle.min.js"></script>
     <script src="../../assets/js/qrcode.min.js"></script>
@@ -761,9 +791,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Tooth chart interaction (unchanged)
             let currentTool = 'caries';
             let dentalChartData = {};
-            
-            // Digital Signature Canvas Setup - Removed since Student Certification is removed
-            // All related signature code has been removed
             
             $('.tooth').click(function() {
                 const toothId = $(this).data('tooth');
@@ -803,17 +830,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             });
         });
     </script>
-      <?php if (!empty($success_message)): ?>
-        
-<script>
-    alert("Form successfully submitted! Please wait for admin verification.");
-    window.location.href = "../user_dashboard.php";
-    
-    
-</script>
-
-<?php endif; ?>
-
+    <?php if (!empty($success_message)): ?>
+    <script>
+        alert("Form successfully submitted! Please wait for admin verification.");
+        window.location.href = "../user_dashboard.php";
+    </script>
+    <?php endif; ?>
 </body>
-
 </html>

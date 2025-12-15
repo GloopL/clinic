@@ -40,38 +40,13 @@ if (isset($_SESSION['username'])) {
     $stmt->close();
 }
 
-// Function to create user_details table
-function createUserDetailsTable($conn) {
-    $sql = "
-        CREATE TABLE IF NOT EXISTS user_details (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            full_name VARCHAR(255),
-            contact_number VARCHAR(20),
-            department VARCHAR(100),
-            year_level VARCHAR(20),
-            address TEXT,
-            birthdate DATE,
-            gender ENUM('Male', 'Female', 'Other'),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE KEY unique_user (user_id)
-        )
-    ";
-    
-    if ($conn->query($sql) === TRUE) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-// Handle form submission
+// Handle form submission - SIMPLIFIED TO ONLY UPDATE PATIENTS TABLE
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $full_name = $_POST['full_name'] ?? '';
     $email = $_POST['email'] ?? '';
+    $telephone_number = $_POST['telephone_number'] ?? '';
     $contact_number = $_POST['contact_number'] ?? '';
+    $civil_status = $_POST['civil_status'] ?? '';
     $department = $_POST['department'] ?? '';
     $year_level = $_POST['year_level'] ?? '';
     $address = $_POST['address'] ?? '';
@@ -91,91 +66,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $last_name = $name_parts[1];
     }
 
-    // Check if user_details table exists, if not create it
-    $check_table = $conn->query("SHOW TABLES LIKE 'user_details'");
-    if ($check_table->num_rows == 0) {
-        if (!createUserDetailsTable($conn)) {
-            $message = "Error creating user details table: " . $conn->error;
+    // Sync with patients table - THIS IS THE MAIN TABLE
+    $student_id = $user_data['username']; // SR Code from users table
+
+    // Check if patient record exists
+    $check_patient = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
+    $check_patient->bind_param("s", $student_id);
+    $check_patient->execute();
+    $patient_result = $check_patient->get_result();
+
+    if ($patient_result->num_rows > 0) {
+        // Update existing patient record
+        $stmt = $conn->prepare("UPDATE patients SET first_name=?, middle_name=?, last_name=?, date_of_birth=?, sex=?, contact_number=?, telephone_number=?, civil_status=?, program=?, year_level=?, address=? WHERE student_id=?");
+        if ($stmt) {
+            $stmt->bind_param("ssssssssssss", $first_name, $middle_name, $last_name, $birthdate, $gender, $contact_number, $telephone_number, $civil_status, $department, $year_level, $address, $student_id);
+            if ($stmt->execute()) {
+                $success = true;
+            } else {
+                $message = "Error updating patient record: " . $stmt->error;
+                $message_type = "error";
+            }
+            $stmt->close();
+        } else {
+            $message = "Error preparing update statement: " . $conn->error;
+            $message_type = "error";
+        }
+    } else {
+        // Create new patient record
+        $stmt = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, contact_number, telephone_number, civil_status, program, year_level, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("ssssssssssss", $student_id, $first_name, $middle_name, $last_name, $birthdate, $gender, $contact_number, $telephone_number, $civil_status, $department, $year_level, $address);
+            if ($stmt->execute()) {
+                $success = true;
+            } else {
+                $message = "Error inserting patient record: " . $stmt->error;
+                $message_type = "error";
+            }
+            $stmt->close();
+        } else {
+            $message = "Error preparing insert statement: " . $conn->error;
             $message_type = "error";
         }
     }
+    $check_patient->close();
 
-    if (!$message) { // Only proceed if no table creation error
-        // Check if user details already exist
-        $check_details = $conn->query("SELECT * FROM user_details WHERE user_id = $user_id");
-
-        if ($check_details && $check_details->num_rows > 0) {
-            // Update existing details
-            $stmt = $conn->prepare("UPDATE user_details SET full_name=?, contact_number=?, department=?, year_level=?, address=?, birthdate=?, gender=?, updated_at=NOW() WHERE user_id=?");
-            if ($stmt) {
-                $stmt->bind_param("sssssssi", $full_name, $contact_number, $department, $year_level, $address, $birthdate, $gender, $user_id);
-                if ($stmt->execute()) {
-                    $success = true;
-                } else {
-                    $message = "Error updating profile: " . $stmt->error;
-                    $message_type = "error";
-                }
-                $stmt->close();
-            } else {
-                $message = "Error preparing update statement: " . $conn->error;
-                $message_type = "error";
-            }
-        } else {
-            // Insert new details
-            $stmt = $conn->prepare("INSERT INTO user_details (user_id, full_name, contact_number, department, year_level, address, birthdate, gender) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            if ($stmt) {
-                $stmt->bind_param("isssssss", $user_id, $full_name, $contact_number, $department, $year_level, $address, $birthdate, $gender);
-                if ($stmt->execute()) {
-                    $success = true;
-                } else {
-                    $message = "Error inserting profile: " . $stmt->error;
-                    $message_type = "error";
-                }
-                $stmt->close();
-            } else {
-                $message = "Error preparing insert statement: " . $conn->error;
-                $message_type = "error";
-            }
-        }
-
-        // Sync with patients table for form pre-population
-        if (isset($success) && $success) {
-            $student_id = $user_data['username']; // SR Code from users table
-
-            // Check if patient record exists
-            $check_patient = $conn->prepare("SELECT id FROM patients WHERE student_id = ?");
-            $check_patient->bind_param("s", $student_id);
-            $check_patient->execute();
-            $patient_result = $check_patient->get_result();
-
-            if ($patient_result->num_rows > 0) {
-                // Update existing patient record WITH ADDRESS
-                $stmt = $conn->prepare("UPDATE patients SET first_name=?, middle_name=?, last_name=?, date_of_birth=?, sex=?, program=?, year_level=?, address=? WHERE student_id=?");
-                $stmt->bind_param("sssssssss", $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address, $student_id);
-            } else {
-                // Create new patient record WITH ADDRESS
-                $stmt = $conn->prepare("INSERT INTO patients (student_id, first_name, middle_name, last_name, date_of_birth, sex, program, year_level, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssssssss", $student_id, $first_name, $middle_name, $last_name, $birthdate, $gender, $department, $year_level, $address);
-            }
-
-            if ($stmt->execute()) {
-                // Patient record updated/created successfully
-            } else {
-                // Don't fail the whole operation for patient sync error, just log it
-                error_log("Patient sync error: " . $stmt->error);
-            }
-            $stmt->close();
-            $check_patient->close();
-        }
-
-        // Update email in users table if successful
-        if (isset($success) && $success) {
-            $update_email = $conn->prepare("UPDATE users SET email = ? WHERE id = ?");
-            if ($update_email) {
-                $update_email->bind_param("si", $email, $user_id);
-                $update_email->execute();
-                $update_email->close();
-
+    // Update email in users table if successful
+    if (isset($success) && $success) {
+        $update_email = $conn->prepare("UPDATE users SET email = ? WHERE id = ?");
+        if ($update_email) {
+            $update_email->bind_param("si", $email, $user_id);
+            if ($update_email->execute()) {
                 $message = "Profile updated successfully!";
                 $message_type = "success";
                 
@@ -189,7 +129,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     ]);
                     exit();
                 }
+            } else {
+                $message = "Error updating email: " . $update_email->error;
+                $message_type = "error";
             }
+            $update_email->close();
         }
     }
     
@@ -204,40 +148,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Get user details if table exists
-$user_details = [];
-$check_table = $conn->query("SHOW TABLES LIKE 'user_details'");
-if ($check_table->num_rows > 0) {
-    $details_result = $conn->query("SELECT * FROM user_details WHERE user_id = $user_id");
-    if ($details_result && $details_result->num_rows > 0) {
-        $user_details = $details_result->fetch_assoc();
-    }
-}
-
-// Pre-fill from patient_data if fields are empty and patient_data exists
+// Get patient details for pre-filling
+$patient_details = [];
 if ($patient_data) {
-    // Construct full name from patient data if not already set
-    if (empty($user_details['full_name'])) {
-        $name_parts = array_filter([
-            $patient_data['first_name'] ?? '',
-            $patient_data['middle_name'] ?? '',
-            $patient_data['last_name'] ?? ''
-        ]);
-        $user_details['full_name'] = implode(' ', $name_parts);
-    }
-    // Pre-fill other fields if empty
-    if (empty($user_details['contact_number'])) {
-        $user_details['contact_number'] = $patient_data['contact_number'] ?? '';
-    }
-    if (empty($user_details['address'])) {
-        $user_details['address'] = $patient_data['address'] ?? '';
-    }
-    if (empty($user_details['birthdate'])) {
-        $user_details['birthdate'] = $patient_data['date_of_birth'] ?? '';
-    }
-    if (empty($user_details['gender'])) {
-        $user_details['gender'] = $patient_data['sex'] ?? '';
-    }
+    // Construct full name from patient data
+    $name_parts = array_filter([
+        $patient_data['first_name'] ?? '',
+        $patient_data['middle_name'] ?? '',
+        $patient_data['last_name'] ?? ''
+    ]);
+    $patient_details['full_name'] = implode(' ', $name_parts);
+    
+    // Get other fields
+    $patient_details['contact_number'] = $patient_data['contact_number'] ?? '';
+    $patient_details['telephone_number'] = $patient_data['telephone_number'] ?? '';
+    $patient_details['civil_status'] = $patient_data['civil_status'] ?? '';
+    $patient_details['address'] = $patient_data['address'] ?? '';
+    $patient_details['birthdate'] = $patient_data['date_of_birth'] ?? '';
+    $patient_details['gender'] = $patient_data['sex'] ?? '';
+    $patient_details['department'] = $patient_data['program'] ?? '';
+    $patient_details['year_level'] = $patient_data['year_level'] ?? '';
 }
 ?>
 
@@ -250,7 +180,6 @@ if ($patient_data) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        /* Custom maroon theme (#800000) */
         :root {
             --maroon-primary: #800000;
             --maroon-dark: #660000;
@@ -276,7 +205,6 @@ if ($patient_data) {
             --tw-ring-color: var(--maroon-primary);
         }
         
-        /* Hide scrollbar for iframe */
         body {
             overflow: hidden;
         }
@@ -284,7 +212,6 @@ if ($patient_data) {
 </head>
 <body class="bg-white">
     <div class="max-h-screen overflow-y-auto p-0">
-        <!-- Modal header -->
         <div class="sticky top-0 z-10 bg-white border-b px-6 py-4">
             <div class="flex justify-between items-center">
                 <h2 class="text-xl font-bold text-gray-800">Edit Profile Information</h2>
@@ -294,7 +221,6 @@ if ($patient_data) {
             </div>
         </div>
 
-        <!-- Error message -->
         <?php if ($message && $message_type == 'error'): ?>
             <div class="bg-red-100 border-l-4 border-red-400 text-red-700 p-4 mx-6 mt-4">
                 <div class="flex items-center">
@@ -306,7 +232,6 @@ if ($patient_data) {
 
         <form method="POST" class="p-6 space-y-6" id="profileForm">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Basic Information -->
                 <div class="space-y-4">
                     <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
                     
@@ -320,7 +245,7 @@ if ($patient_data) {
                     <div>
                         <label for="full_name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                         <input type="text" id="full_name" name="full_name"
-                               value="<?php echo htmlspecialchars($user_details['full_name'] ?? ''); ?>"
+                               value="<?php echo htmlspecialchars($patient_details['full_name'] ?? ''); ?>"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
                                placeholder="Enter your full name">
                     </div>
@@ -334,22 +259,42 @@ if ($patient_data) {
                     </div>
 
                     <div>
-                        <label for="contact_number" class="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
-                        <input type="tel" id="contact_number" name="contact_number"
-                               value="<?php echo htmlspecialchars($user_details['contact_number'] ?? ''); ?>"
+                        <label for="telephone_number" class="block text-sm font-medium text-gray-700 mb-1">Telephone Number</label>
+                        <input type="tel" id="telephone_number" name="telephone_number"
+                               value="<?php echo htmlspecialchars($patient_details['telephone_number'] ?? ''); ?>"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
-                               placeholder="Enter your contact number">
+                               placeholder="Enter telephone number (landline)">
+                    </div>
+
+                    <div>
+                        <label for="contact_number" class="block text-sm font-medium text-gray-700 mb-1">Cellphone Number</label>
+                        <input type="tel" id="contact_number" name="contact_number"
+                               value="<?php echo htmlspecialchars($patient_details['contact_number'] ?? ''); ?>"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
+                               placeholder="Enter cellphone number">
+                    </div>
+
+                    <div>
+                        <label for="civil_status" class="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>
+                        <select id="civil_status" name="civil_status" 
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
+    <option value="">Select Civil Status</option>
+    <option value="Single" <?php echo (isset($patient_details['civil_status']) && $patient_details['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
+    <option value="Married" <?php echo (isset($patient_details['civil_status']) && $patient_details['civil_status'] == 'Married') ? 'selected' : ''; ?>>Married</option>
+    <option value="Divorced" <?php echo (isset($patient_details['civil_status']) && $patient_details['civil_status'] == 'Divorced') ? 'selected' : ''; ?>>Divorced</option>
+    <option value="Widowed" <?php echo (isset($patient_details['civil_status']) && $patient_details['civil_status'] == 'Widowed') ? 'selected' : ''; ?>>Widowed</option>
+    <option value="Separated" <?php echo (isset($patient_details['civil_status']) && $patient_details['civil_status'] == 'Separated') ? 'selected' : ''; ?>>Separated</option>
+</select>
                     </div>
                 </div>
 
-                <!-- Additional Information -->
                 <div class="space-y-4">
                     <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Additional Information</h3>
                     
                     <div>
                         <label for="department" class="block text-sm font-medium text-gray-700 mb-1">Program</label>
                         <input type="text" id="department" name="department" 
-                               value="<?php echo htmlspecialchars($user_details['department'] ?? ''); ?>"
+                               value="<?php echo htmlspecialchars($patient_details['department'] ?? ''); ?>"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
                                placeholder="Enter Program">
                     </div>
@@ -358,19 +303,19 @@ if ($patient_data) {
                         <label for="year_level" class="block text-sm font-medium text-gray-700 mb-1">Year Level</label>
                         <select id="year_level" name="year_level" 
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
-                            <option value="" <?php echo empty($user_details['year_level']) ? 'selected' : ''; ?>>Select Year Level</option>
-                            <option value="1st Year" <?php echo ($user_details['year_level'] ?? '') == '1st Year' ? 'selected' : ''; ?>>1st</option>
-                            <option value="2nd Year" <?php echo ($user_details['year_level'] ?? '') == '2nd Year' ? 'selected' : ''; ?>>2nd</option>
-                            <option value="3rd Year" <?php echo ($user_details['year_level'] ?? '') == '3rd Year' ? 'selected' : ''; ?>>3rd</option>
-                            <option value="4th Year" <?php echo ($user_details['year_level'] ?? '') == '4th Year' ? 'selected' : ''; ?>>4th</option>
-                            <option value="5th Year" <?php echo ($user_details['year_level'] ?? '') == '5th Year' ? 'selected' : ''; ?>>5th</option>
+                            <option value="" <?php echo empty($patient_details['year_level']) ? 'selected' : ''; ?>>Select Year Level</option>
+                            <option value="1st Year" <?php echo ($patient_details['year_level'] ?? '') == '1st Year' ? 'selected' : ''; ?>>1st</option>
+                            <option value="2nd Year" <?php echo ($patient_details['year_level'] ?? '') == '2nd Year' ? 'selected' : ''; ?>>2nd</option>
+                            <option value="3rd Year" <?php echo ($patient_details['year_level'] ?? '') == '3rd Year' ? 'selected' : ''; ?>>3rd</option>
+                            <option value="4th Year" <?php echo ($patient_details['year_level'] ?? '') == '4th Year' ? 'selected' : ''; ?>>4th</option>
+                            <option value="5th Year" <?php echo ($patient_details['year_level'] ?? '') == '5th Year' ? 'selected' : ''; ?>>5th</option>
                         </select>
                     </div>
 
                     <div>
                         <label for="birthdate" class="block text-sm font-medium text-gray-700 mb-1">Birthdate</label>
                         <input type="date" id="birthdate" name="birthdate"
-                               value="<?php echo htmlspecialchars($user_details['birthdate'] ?? ''); ?>"
+                               value="<?php echo htmlspecialchars($patient_details['birthdate'] ?? ''); ?>"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
                     </div>
 
@@ -379,9 +324,9 @@ if ($patient_data) {
                         <select id="gender" name="gender" 
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon">
                             <option value="">Select Gender</option>
-                            <option value="Male" <?php echo ($user_details['gender'] ?? '') == 'Male' ? 'selected' : ''; ?>>Male</option>
-                            <option value="Female" <?php echo ($user_details['gender'] ?? '') == 'Female' ? 'selected' : ''; ?>>Female</option>
-                            <option value="Other" <?php echo ($user_details['gender'] ?? '') == 'Other' ? 'selected' : ''; ?>>Other</option>
+                            <option value="Male" <?php echo ($patient_details['gender'] ?? '') == 'Male' ? 'selected' : ''; ?>>Male</option>
+                            <option value="Female" <?php echo ($patient_details['gender'] ?? '') == 'Female' ? 'selected' : ''; ?>>Female</option>
+                            <option value="Other" <?php echo ($patient_details['gender'] ?? '') == 'Other' ? 'selected' : ''; ?>>Other</option>
                         </select>
                     </div>
                 </div>
@@ -391,7 +336,7 @@ if ($patient_data) {
                 <label for="address" class="block text-sm font-medium text-gray-700 mb-1">Address</label>
                 <textarea id="address" name="address" rows="3"
                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-maroon focus:border-maroon focus-maroon"
-                          placeholder="Enter your complete address"><?php echo htmlspecialchars($user_details['address'] ?? ''); ?></textarea>
+                          placeholder="Enter your complete address"><?php echo htmlspecialchars($patient_details['address'] ?? ''); ?></textarea>
             </div>
 
             <div class="flex gap-4 pt-6 border-t">
@@ -406,26 +351,21 @@ if ($patient_data) {
     </div>
 
     <script>
-        // Function to close the modal
         function closeModal() {
-            // Send message to parent to close modal
             window.parent.postMessage('closeProfileModal', '*');
         }
         
-        // Handle form submission
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('profileForm');
             
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-                // Show loading state
                 const submitBtn = form.querySelector('button[type="submit"]');
                 const originalText = submitBtn.innerHTML;
                 submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Updating...';
                 submitBtn.disabled = true;
                 
-                // Submit via AJAX
                 const formData = new FormData(form);
                 
                 fetch('update_user_profile.php', {
@@ -438,21 +378,16 @@ if ($patient_data) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Send success message to parent
                         window.parent.postMessage({
                             type: 'profileUpdateSuccess',
                             message: data.message
                         }, '*');
                         
-                        // Close modal after 1.5 seconds
                         setTimeout(() => {
                             closeModal();
                         }, 1500);
                     } else {
-                        // Show error message
                         alert('Error: ' + data.message);
-                        
-                        // Restore button state
                         submitBtn.innerHTML = originalText;
                         submitBtn.disabled = false;
                     }
@@ -460,8 +395,6 @@ if ($patient_data) {
                 .catch(error => {
                     console.error('Error:', error);
                     alert('An error occurred. Please try again.');
-                    
-                    // Restore button state
                     submitBtn.innerHTML = originalText;
                     submitBtn.disabled = false;
                 });

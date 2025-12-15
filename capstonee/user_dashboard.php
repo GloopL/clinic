@@ -914,10 +914,7 @@ $user_submissions_result = $stmt->get_result();
                                 <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
                                 <span>Review your information before submission</span>
                             </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Forms will be verified by clinic staff within 3-5 working days</span>
-                            </li>
+                            
                             <li class="flex items-start gap-2">
                                 <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
                                 <span>You can track submission status in the Dashboard</span>
