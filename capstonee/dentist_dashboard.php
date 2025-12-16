@@ -28,6 +28,10 @@ $user_profile = $result->fetch_assoc();
 // Get display name - use full_name from users table, fallback to username
 $display_name = !empty($user_profile['full_name']) ? trim($user_profile['full_name']) : $user_profile['username'];
 
+// Ensure greeting only contains a single "Dr." prefix
+$greeting_name = trim(preg_replace('/^(Dr\.?\s*)+/i', '', $display_name));
+$greeting_display =  ($greeting_name !== '' ? $greeting_name : $display_name);
+
 // Get counts for dashboard
 $total_patients = $conn->query("SELECT COUNT(*) as count FROM patients")->fetch_assoc()['count'];
 $total_records = $conn->query("SELECT COUNT(*) as count FROM medical_records")->fetch_assoc()['count'];
@@ -37,6 +41,10 @@ $total_medical_exams = $conn->query("SELECT COUNT(*) as count FROM medical_recor
 
 // Get pending verifications count for dentist (dental exams only)
 $pending_verifications = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'pending' AND record_type = 'dental_exam'")->fetch_assoc()['count'];
+
+// Get for certification count for dentist (dental exams)
+$for_certification_result = $conn->query("SELECT COUNT(*) as count FROM medical_records WHERE verification_status = 'for_certification' AND record_type = 'dental_exam'");
+$for_certification_count = $for_certification_result ? $for_certification_result->fetch_assoc()['count'] : 0;
 
 // Get recent patients (only those with dental exam records)
 $recent_patients_query = "
@@ -122,6 +130,8 @@ function getActivityIcon($activity_type) {
             return 'bi-tooth text-teal-600';
         case 'treatment':
             return 'bi-heart-pulse-fill text-red-600';
+        case 'certification':
+            return 'bi-file-earmark-check-fill text-red-600';
         default:
             return 'bi-activity text-gray-600';
     }
@@ -141,6 +151,8 @@ function getActivityBg($activity_type) {
         case 'dental_exam':
             return 'bg-teal-100';
         case 'treatment':
+            return 'bg-red-100';
+        case 'certification':
             return 'bg-red-100';
         default:
             return 'bg-gray-100';
@@ -361,6 +373,117 @@ function getActivityBg($activity_type) {
         .pulse-badge {
             animation: pulse-badge 2s infinite;
         }
+
+        /* Iframe loading styles */
+        #patients-loading {
+            animation: fadeIn 0.3s ease;
+        }
+
+        #patients-iframe-container iframe {
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Spinner for loading */
+        .spinner-border {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            vertical-align: text-bottom;
+            border: 0.25em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border .75s linear infinite;
+        }
+
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Add this to your existing styles */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Important for flex children to scroll */
+        }
+
+        .tab-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        /* For patients tab only */
+        #patients-content.active ~ .page-footer {
+            margin-top: 0;
+        }
+
+        #patients-content.active {
+            margin: -1.5rem; /* Counteract the p-6 from main-content */
+        }
+
+        /* Fix for patients tab only */
+        #patients-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        #patients-content .bg-white {
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* FIX: Full-screen iframe styles */
+        .fullscreen-iframe-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .fullscreen-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Ensure iframe takes full space */
+        .tab-panel > .bg-white {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+        }
+
+        #verification-content,
+        #dental-exams-content,
+        #patients-content {
+            position: relative;
+        }
+
+        #verification-content > .bg-white,
+        #dental-exams-content > .bg-white,
+        #patients-content > .bg-white {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
     </style>
 </head>
 <body class="bg-maroon-light">
@@ -377,7 +500,7 @@ function getActivityBg($activity_type) {
                     <?php echo generateDefaultAvatar($display_name); ?>
                 </div>
                 <div>
-                    <h3 class="font-bold text-white text-lg">Dr. <?php echo htmlspecialchars($display_name); ?></h3>
+                    <h3 class="font-bold text-white text-lg">Dr. <?php echo htmlspecialchars($greeting_display); ?></h3>
                     <p class="text-gray-400 text-sm">Dentist</p>
                 </div>
             </div>
@@ -407,12 +530,16 @@ function getActivityBg($activity_type) {
                 <i class="bi bi-people-fill"></i>
                 <span>Patients</span>
             </a>
-            <a href="#dental-exams" class="tab-link" data-tab="dental-exams">
-                <i class="bi bi-clipboard-check"></i>
-                <span>Dental Exams</span>
+            <a href="#verification" class="tab-link" data-tab="verification">
+                <i class="bi bi-shield-check"></i>
+                <span>Verification</span>
                 <?php if ($pending_verifications > 0): ?>
                     <span class="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full pulse-badge"><?php echo $pending_verifications; ?></span>
                 <?php endif; ?>
+            </a>
+            <a href="#dental-exams" class="tab-link" data-tab="dental-exams">
+                <i class="bi bi-clipboard-check"></i>
+                <span>Dental Exams</span>
             </a>
             <a href="#treatment" class="tab-link" data-tab="treatment">
                 <i class="bi bi-heart-pulse"></i>
@@ -496,7 +623,7 @@ function getActivityBg($activity_type) {
                 <div class="bg-white rounded-xl shadow-md p-6 mb-6 border-l-4 border-maroon">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome, Dr. <?php echo htmlspecialchars($display_name); ?>!</h2>
+                            <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome, Dr. <?php echo htmlspecialchars($greeting_display); ?>!</h2>
                             <p class="text-gray-600">Manage dental examinations, treatment plans, and patient oral health records.</p>
                         </div>
                         <div class="hidden md:block">
@@ -514,10 +641,10 @@ function getActivityBg($activity_type) {
                             <i class="bi bi-exclamation-triangle text-maroon text-3xl pulse-badge"></i>
                             <div>
                                 <h3 class="text-lg font-bold text-maroon">Pending Verifications</h3>
-                                <p class="text-maroon-light">You have <strong><?php echo $pending_verifications; ?></strong> submission(s) waiting for verification.</p>
+                                <p class="text-maroon-light">You have <strong><?php echo $pending_verifications; ?></strong> dental examination(s) waiting for verification.</p>
                             </div>
                         </div>
-                        <a href="#dental-exams" onclick="switchTab('dental-exams')" class="maroon-gradient-button text-white font-semibold px-6 py-3 rounded-lg shadow transition">
+                        <a href="#verification" onclick="switchTab('verification')" class="maroon-gradient-button text-white font-semibold px-6 py-3 rounded-lg shadow transition">
                             <i class="bi bi-shield-check mr-2"></i>Review Now
                         </a>
                     </div>
@@ -525,7 +652,7 @@ function getActivityBg($activity_type) {
                 <?php endif; ?>
 
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <!-- Total Patients Card -->
                     <div class="stats-card-1 text-white rounded-xl p-6 shadow-lg">
                         <div class="flex items-center justify-between">
@@ -542,14 +669,30 @@ function getActivityBg($activity_type) {
                         </div>
                     </div>
 
-                    <!-- Consultations Card -->
+                    <!-- For Certification Card -->
                     <div class="stats-card-2 text-white rounded-xl p-6 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm opacity-90">Consultations</p>
+                                <p class="text-sm opacity-90">For Certification</p>
+                                <p class="text-3xl font-bold mt-2"><?php echo $for_certification_count; ?></p>
+                            </div>
+                            <i class="bi bi-file-earmark-check-fill text-4xl opacity-80"></i>
+                        </div>
+                        <div class="mt-4">
+                            <a href="modules/records/for_certification.php?type=dental_exam" target="_blank" class="text-white text-sm font-medium hover:underline flex items-center">
+                                Review <i class="bi bi-arrow-right ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Consultations Card -->
+                    <div class="stats-card-3 text-white rounded-xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm opacity-90">Dental Exams</p>
                                 <p class="text-3xl font-bold mt-2"><?php echo $total_dental_exams; ?></p>
                             </div>
-                            <i class="bi bi-person-badge-fill text-4xl opacity-80"></i>
+                            <i class="bi bi-tooth-fill text-4xl opacity-80"></i>
                         </div>
                         <div class="mt-4">
                             <a href="#dental-exams" onclick="switchTab('dental-exams')" class="text-white text-sm font-medium hover:underline flex items-center">
@@ -559,17 +702,17 @@ function getActivityBg($activity_type) {
                     </div>
 
                     <!-- Pending Verifications Card -->
-                    <div class="stats-card-3 text-white rounded-xl p-6 shadow-lg">
+                    <div class="stats-card-4 text-white rounded-xl p-6 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-sm opacity-90">Pending Verifications</p>
                                 <p class="text-3xl font-bold mt-2"><?php echo $pending_verifications; ?></p>
                             </div>
-                            <i class="bi bi-shield-exclamation text-4xl opacity-80"></i>
+                            <i class="bi bi-clipboard2-check-fill text-4xl opacity-80"></i>
                         </div>
                         <div class="mt-4">
-                            <a href="#dental-exams" onclick="switchTab('dental-exams')" class="text-white text-sm font-medium hover:underline flex items-center">
-                                Verify Now <i class="bi bi-arrow-right ml-1"></i>
+                            <a href="#verification" onclick="switchTab('verification')" class="text-white text-sm font-medium hover:underline flex items-center">
+                                Review Now <i class="bi bi-arrow-right ml-1"></i>
                             </a>
                         </div>
                     </div>
@@ -634,7 +777,7 @@ function getActivityBg($activity_type) {
                         <i class="bi bi-lightning-charge text-maroon"></i> Quick Actions
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <a href="modules/records/verify_submission.php" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
+                        <a href="#verification" onclick="switchTab('verification')" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
                             <div class="bg-maroon text-white p-3 rounded-lg">
                                 <i class="bi bi-shield-check"></i>
                             </div>
@@ -644,7 +787,7 @@ function getActivityBg($activity_type) {
                             </div>
                         </a>
                         
-                        <a href="modules/records/dental_exams.php" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
+                        <a href="#dental-exams" onclick="switchTab('dental-exams')" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
                             <div class="bg-maroon text-white p-3 rounded-lg">
                                 <i class="bi bi-tooth"></i>
                             </div>
@@ -654,7 +797,7 @@ function getActivityBg($activity_type) {
                             </div>
                         </a>
                         
-                        <a href="modules/records/patients.php" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
+                        <a href="#patients" onclick="switchTab('patients')" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
                             <div class="bg-maroon text-white p-3 rounded-lg">
                                 <i class="bi bi-person-plus"></i>
                             </div>
@@ -668,99 +811,69 @@ function getActivityBg($activity_type) {
             </div>
 
             <!-- Patients Tab -->
-            <div id="patients-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-people-fill text-maroon"></i> Patient Management
-                    </h2>
-                    <p class="text-gray-600 mb-6">View and manage all patient records</p>
-                    
-                    <div class="mb-6">
-                        <a href="modules/records/patients.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-person-plus"></i> Manage All Patients
-                        </a>
+            <div id="patients-content" class="tab-panel hidden" style="display: none !important;">
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full">
+                    <!-- Loading indicator -->
+                    <div id="patients-loading" class="h-full flex items-center justify-center" style="display: none;">
+                        <div class="text-center">
+                            <div class="spinner-border text-maroon" role="status">
+                                <span class="sr-only">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-gray-600">Loading patient management...</p>
+                        </div>
                     </div>
                     
-                    <!-- Patient search and filters would go here -->
-                    <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-maroon mb-3 flex items-center gap-2">
-                            <i class="bi bi-info-circle-fill"></i> Patient Management Guidelines
-                        </h3>
-                        <ul class="space-y-2 text-gray-700">
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Search patients by name, student ID, or program</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>View complete patient dental history</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Access dental examination records</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Update dental treatment plans</span>
-                            </li>
-                        </ul>
+                    <!-- Content container -->
+                    <div id="patients-iframe-container" class="hidden h-full" style="display: none;">
+                        <iframe 
+                            id="patients-iframe"
+                            src=""
+                            frameborder="0"
+                            class="w-full h-full fullscreen-iframe"
+                            style="border: none; display: none;"
+                            onload="hidePatientsLoading()"
+                        ></iframe>
                     </div>
+                    
+                    <!-- Fallback content if iframe fails -->
+                    <div id="patients-fallback" class="hidden h-full flex items-center justify-center" style="display: none;">
+                        <div class="text-center p-6">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                                <i class="bi bi-people-fill text-maroon"></i> Patient Management
+                            </h2>
+                            <p class="text-gray-600 mb-6">View and manage all patient records</p>
+                            
+                            <div class="mb-6">
+                                <a href="modules/records/patients.php" target="_blank" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
+                                    <i class="bi bi-box-arrow-up-right"></i> Open Patients Management in New Tab
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verification Tab -->
+            <div id="verification-content" class="tab-panel hidden">
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
+                    <iframe 
+                        src="modules/records/verify_submission.php" 
+                        frameborder="0" 
+                        class="w-full h-full fullscreen-iframe"
+                        style="border: none;"
+                    ></iframe>
                 </div>
             </div>
 
             <!-- Dental Exams Tab -->
             <div id="dental-exams-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-clipboard-check text-maroon"></i> Dental Examinations
-                    </h2>
-                    <p class="text-gray-600 mb-6">Verify and manage dental examination forms</p>
-                    
-                    <?php if ($pending_verifications > 0): ?>
-                    <div class="maroon-gradient-alert p-4 mb-6 rounded-lg shadow-md border-l-4 border-maroon">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <i class="bi bi-exclamation-triangle text-maroon text-2xl"></i>
-                                <div>
-                                    <h3 class="text-lg font-bold text-maroon">Action Required</h3>
-                                    <p class="text-maroon-light">You have <strong><?php echo $pending_verifications; ?></strong> dental examination(s) waiting for verification.</p>
-                                </div>
-                            </div>
-                            <a href="modules/records/verify_submission.php" class="maroon-gradient-button text-white font-semibold px-6 py-3 rounded-lg shadow transition">
-                                <i class="bi bi-shield-check mr-2"></i>Review All
-                            </a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                            <div class="flex items-center justify-center mb-4">
-                                <i class="bi bi-clipboard2-pulse-fill text-4xl text-maroon"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2 text-gray-800">Total Dental Exams</h3>
-                            <p class="text-3xl font-bold text-center text-maroon"><?php echo $total_dental_exams; ?></p>
-                            <p class="text-sm opacity-90 text-center text-gray-600">All dental examination records</p>
-                        </div>
-
-                        <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                            <div class="flex items-center justify-center mb-4">
-                                <i class="fas fa-tooth text-4xl text-maroon"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold tracking-tight text-center mb-2 text-gray-800">Pending Verification</h3>
-                            <p class="text-3xl font-bold text-center text-orange-600"><?php echo $pending_verifications; ?></p>
-                            <p class="text-sm opacity-90 text-center text-gray-600">Awaiting dental review</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="modules/records/verify_submission.php" class="flex-1 maroon-gradient-button text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all text-center">
-                            <i class="bi bi-shield-check mr-2"></i> Verify Dental Exams
-                        </a>
-                        <a href="modules/records/submissions.php?type=dental_exam" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all text-center">
-                            <i class="bi bi-list-check mr-2"></i> View All Dental Exams
-                        </a>
-                    </div>
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
+                    <iframe 
+                        src="modules/records/submissions.php?type=dental_exam" 
+                        frameborder="0" 
+                        class="w-full h-full fullscreen-iframe"
+                        style="border: none;"
+                    ></iframe>
                 </div>
             </div>
 
@@ -773,7 +886,7 @@ function getActivityBg($activity_type) {
                     <p class="text-gray-600 mb-6">Manage dental treatment plans and follow-ups</p>
                     
                     <div class="mb-6">
-                        <a href="modules/records/treatment_plans.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
+                        <a href="modules/records/treatment_plans.php" target="_blank" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
                             <i class="bi bi-calendar-plus"></i> Manage Treatment Plans
                         </a>
                     </div>
@@ -829,7 +942,7 @@ function getActivityBg($activity_type) {
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                                        <p class="text-gray-900 font-medium">Dr. <?php echo htmlspecialchars($display_name); ?></p>
+                                        <p class="text-gray-900 font-medium">Dr. <?php echo htmlspecialchars($greeting_display); ?></p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
@@ -867,7 +980,7 @@ function getActivityBg($activity_type) {
                                 <div class="w-32 h-32 maroon-gradient rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-lg mx-auto mb-4">
                                     <?php echo generateDefaultAvatar($display_name); ?>
                                 </div>
-                                <h3 class="font-bold text-lg text-gray-800">Dr. <?php echo htmlspecialchars($display_name); ?></h3>
+                                <h3 class="font-bold text-lg text-gray-800">Dr. <?php echo htmlspecialchars($greeting_display); ?></h3>
                                 <p class="text-gray-600 text-sm mb-4">Dentist</p>
                                 
                                 <div class="space-y-3 text-left">
@@ -880,7 +993,7 @@ function getActivityBg($activity_type) {
                                         <span class="font-medium"><?php echo date('M j, g:i A'); ?></span>
                                     </div>
                                     <div class="flex justify-between">
-                                        <span class="text-gray-600">Patients Seen:</span>
+                                        <span class="text-gray-600">Dental Exams:</span>
                                         <span class="font-medium"><?php echo $total_dental_exams; ?></span>
                                     </div>
                                     <div class="flex justify-between">
@@ -974,6 +1087,8 @@ function getActivityBg($activity_type) {
     <script>
     // Tab switching functionality
     function switchTab(tabId) {
+        console.log('Switching to tab:', tabId);
+        
         // Update tab links
         document.querySelectorAll('.tab-link').forEach(link => {
             link.classList.remove('active');
@@ -982,16 +1097,28 @@ function getActivityBg($activity_type) {
             }
         });
 
-        // Update tab content
+        // Hide all tab panels
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.add('hidden');
-            panel.classList.remove('active');
+            panel.style.display = 'none';
         });
 
+        // Show the active tab panel
         const activePanel = document.getElementById(tabId + '-content');
         if (activePanel) {
             activePanel.classList.remove('hidden');
-            activePanel.classList.add('active');
+            activePanel.style.display = 'flex';
+            
+            // Special handling for patients tab
+            if (tabId === 'patients') {
+                console.log('Loading patients tab');
+                loadPatientsContent();
+            }
+            
+            // Resize iframes when switching to verification or dental-exams tabs
+            if (tabId === 'verification' || tabId === 'dental-exams') {
+                setTimeout(resizeAllIframes, 100);
+            }
         }
 
         // Save tab selection
@@ -1240,6 +1367,110 @@ function getActivityBg($activity_type) {
         }, 2000);
     }
 
+    // Function to resize all iframes
+    function resizeAllIframes() {
+        // Resize verification iframe
+        const verificationIframe = document.querySelector('#verification-content iframe');
+        if (verificationIframe) {
+            resizeVerificationIframe(verificationIframe);
+        }
+        
+        // Resize dental-exams iframe
+        const dentalExamsIframe = document.querySelector('#dental-exams-content iframe');
+        if (dentalExamsIframe) {
+            resizeDentalExamsIframe(dentalExamsIframe);
+        }
+        
+        // Resize patients iframe
+        const patientsIframe = document.getElementById('patients-iframe');
+        if (patientsIframe && patientsIframe.style.display !== 'none') {
+            resizePatientsIframe(patientsIframe);
+        }
+    }
+
+    function resizeVerificationIframe(iframe) {
+        if (!iframe) return;
+        
+        const verificationContent = document.getElementById('verification-content');
+        if (!verificationContent) return;
+        
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - headerHeight - footerHeight;
+        
+        // Set iframe height
+        iframe.style.height = Math.max(600, availableHeight) + 'px';
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - headerHeight - footerHeight;
+            iframe.style.height = Math.max(600, newAvailableHeight) + 'px';
+        });
+    }
+
+    function resizeDentalExamsIframe(iframe) {
+        if (!iframe) return;
+        
+        const dentalExamsContent = document.getElementById('dental-exams-content');
+        if (!dentalExamsContent) return;
+        
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - headerHeight - footerHeight;
+        
+        // Set iframe height
+        iframe.style.height = Math.max(600, availableHeight) + 'px';
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - headerHeight - footerHeight;
+            iframe.style.height = Math.max(600, newAvailableHeight) + 'px';
+        });
+    }
+
+    function resizePatientsIframe(iframe) {
+        if (!iframe) return;
+        
+        // Get the patients content container
+        const patientsContent = document.getElementById('patients-content');
+        if (!patientsContent) return;
+        
+        // Calculate available height
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        const mainContent = document.querySelector('.main-content');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        const mainContentTop = mainContent ? mainContent.getBoundingClientRect().top : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - mainContentTop - footerHeight - 20; // 20px buffer
+        
+        // Set iframe height
+        iframe.style.height = Math.max(500, availableHeight) + 'px';
+        console.log('Patients iframe resized to:', iframe.style.height);
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - mainContentTop - footerHeight - 20;
+            iframe.style.height = Math.max(500, newAvailableHeight) + 'px';
+        });
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         updateTime();
@@ -1247,6 +1478,7 @@ function getActivityBg($activity_type) {
         
         // Load saved tab
         const savedTab = localStorage.getItem('dentistSelectedTab') || 'dashboard';
+        console.log('Initial tab:', savedTab);
         switchTab(savedTab);
         
         // Tab click handlers
@@ -1287,8 +1519,100 @@ function getActivityBg($activity_type) {
             if (window.innerWidth > 1024) {
                 closeMobileMenu();
             }
+            // Resize iframes on window resize
+            resizeAllIframes();
         });
+
+        // Add iframe error handling
+        const iframe = document.getElementById('patients-iframe');
+        if (iframe) {
+            iframe.addEventListener('error', function() {
+                console.error('Failed to load patients iframe');
+                showPatientsFallback();
+            });
+            
+            // Check if iframe loads successfully within 10 seconds
+            setTimeout(() => {
+                const loadingEl = document.getElementById('patients-loading');
+                if (loadingEl && !loadingEl.classList.contains('hidden')) {
+                    showPatientsFallback();
+                }
+            }, 10000);
+        }
+        
+        // Initial resize of iframes
+        setTimeout(resizeAllIframes, 500);
     });
+
+    function loadPatientsContent() {
+        console.log('Loading patients content');
+        
+        // Get elements
+        const loadingEl = document.getElementById('patients-loading');
+        const containerEl = document.getElementById('patients-iframe-container');
+        const fallbackEl = document.getElementById('patients-fallback');
+        const iframeEl = document.getElementById('patients-iframe');
+        
+        // Show loading, hide others
+        if (loadingEl) {
+            loadingEl.style.display = 'flex';
+            loadingEl.classList.remove('hidden');
+        }
+        if (containerEl) {
+            containerEl.style.display = 'none';
+            containerEl.classList.add('hidden');
+        }
+        if (fallbackEl) {
+            fallbackEl.style.display = 'none';
+            fallbackEl.classList.add('hidden');
+        }
+        if (iframeEl) {
+            iframeEl.style.display = 'none';
+            // Load the patients page
+            iframeEl.src = "modules/records/patients.php";
+        }
+    }
+
+    function hidePatientsLoading() {
+        console.log('Iframe loaded, hiding loading');
+        
+        const loadingEl = document.getElementById('patients-loading');
+        const containerEl = document.getElementById('patients-iframe-container');
+        const iframe = document.getElementById('patients-iframe');
+        
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+            loadingEl.classList.add('hidden');
+        }
+        if (containerEl) {
+            containerEl.style.display = 'block';
+            containerEl.classList.remove('hidden');
+        }
+        if (iframe) {
+            iframe.style.display = 'block';
+            // Resize iframe to fit
+            resizePatientsIframe(iframe);
+        }
+    }
+
+    function showPatientsFallback() {
+        const loadingEl = document.getElementById('patients-loading');
+        const containerEl = document.getElementById('patients-iframe-container');
+        const fallbackEl = document.getElementById('patients-fallback');
+        
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+            loadingEl.classList.add('hidden');
+        }
+        if (containerEl) {
+            containerEl.style.display = 'none';
+            containerEl.classList.add('hidden');
+        }
+        if (fallbackEl) {
+            fallbackEl.style.display = 'flex';
+            fallbackEl.classList.remove('hidden');
+        }
+    }
     </script>
 </body>
 </html>

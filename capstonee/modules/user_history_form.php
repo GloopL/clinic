@@ -389,7 +389,7 @@ $control_number = "LIPA 25-" . date('Ymd') . '-' . strtoupper(substr(md5(uniqid(
                                        value="<?php echo date('Y-m-d'); ?>" 
                                        required>
                                 <p class="text-xs text-orange-600 mt-2 flex items-center">
-                                    <i class="bi bi-info-circle mr-1"></i> Today's date (can be changed)
+                                    <i class="bi bi-info-circle mr-1"></i> Today's date
                                 </p>
                             </div>
                         </div>

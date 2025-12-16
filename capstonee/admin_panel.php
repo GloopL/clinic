@@ -54,59 +54,62 @@ $stmt->execute();
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
   <style>
-    /* Custom red to orange gradient theme */
-    .red-orange-gradient {
-      background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+    /* Custom maroon theme (#800000) */
+    :root {
+      --maroon-primary: #800000;
+      --maroon-dark: #660000;
+      --maroon-light: #a00000;
+      --maroon-bg: #fff5f5;
     }
     
-    .red-orange-gradient-light {
-      background: linear-gradient(135deg, #fef2f2, #ffedd5, #fed7aa);
+    .maroon-gradient {
+      background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
     }
     
-    .red-orange-gradient-card {
-      background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+    .maroon-gradient-light {
+      background: linear-gradient(135deg, #fff5f5, #ffe5e5);
     }
     
-    .red-orange-gradient-card-light {
-      background: linear-gradient(135deg, #fef2f2, #ffedd5);
+    .maroon-gradient-card {
+      background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
     }
     
-    .red-orange-gradient-button {
-      background: linear-gradient(135deg, #dc2626, #ea580c);
+    .maroon-gradient-button {
+      background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
     }
     
-    .red-orange-gradient-button:hover {
-      background: linear-gradient(135deg, #b91c1c, #c2410c);
+    .maroon-gradient-button:hover {
+      background: linear-gradient(135deg, var(--maroon-dark), var(--maroon-primary));
     }
     
-    .red-orange-gradient-alert {
-      background: linear-gradient(135deg, #fef2f2, #ffedd5);
-      border-left-color: #ea580c;
+    .maroon-gradient-alert {
+      background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+      border-left-color: var(--maroon-primary);
     }
     
-    .red-orange-table-header {
-      background: linear-gradient(135deg, #dc2626, #ea580c);
+    .maroon-table-header {
+      background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
     }
     
-    .red-orange-table-row {
-      background: linear-gradient(135deg, #fef2f2, #ffedd5);
+    .maroon-table-row {
+      background: linear-gradient(135deg, #fff5f5, #ffe5e5);
     }
     
-    .red-orange-table-row:hover {
-      background: linear-gradient(135deg, #fee2e2, #fed7aa);
+    .maroon-table-row:hover {
+      background: linear-gradient(135deg, #ffe5e5, #ffcccc);
     }
     
-    .red-orange-badge {
-      background: linear-gradient(135deg, #fecaca, #fed7aa);
-      color: #7c2d12;
+    .maroon-badge {
+      background: linear-gradient(135deg, #ffcccc, #ffb3b3);
+      color: #800000;
     }
     
-    .red-orange-badge-admin {
-      background: linear-gradient(135deg, #fecaca, #fed7aa);
-      color: #991b1b;
+    .maroon-badge-admin {
+      background: linear-gradient(135deg, #ffcccc, #ffb3b3);
+      color: #800000;
     }
     
-    .red-orange-badge-user {
+    .maroon-badge-user {
       background: linear-gradient(135deg, #bbf7d0, #86efac);
       color: #166534;
     }
@@ -118,39 +121,22 @@ $stmt->execute();
     .yellow-orange-button:hover {
       background: linear-gradient(135deg, #d97706, #b45309);
     }
+    
+    .bg-maroon-light {
+      background-color: #fff5f5;
+    }
   </style>
 </head>
 <body class="bg-gradient-to-br from-orange-50 to-red-50 flex flex-col min-h-screen">
 
-  <!-- Header -->
-  <header class="red-orange-gradient text-white shadow-md">
-    <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-      <div class="flex items-center gap-3">
-        <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-12 h-12 rounded-full object-cover border-4 border-white bg-white">
-        <h1 class="text-lg font-bold">BSU Clinic Record Management System</h1>
-      </div>
-      <nav class="flex items-center gap-6">
-        <a href="dashboard.php" class="hover:text-yellow-200 flex items-center gap-1">
-          <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-        <a href="admin_panel.php" class="text-yellow-200 flex items-center gap-1 font-semibold">
-          <i class="bi bi-person-badge"></i> Admin Panel
-        </a>
-        <a href="logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
-          <i class="bi bi-box-arrow-right"></i> Logout
-        </a>
-      </nav>
-    </div>
-  </header>
-
   <!-- Main -->
   <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
-      <div class="red-orange-gradient px-6 py-4 flex justify-between items-center">
+      <div class="maroon-table-header px-6 py-4 flex justify-between items-center">
         <h2 class="text-xl font-bold text-white flex items-center gap-2">
           <i class="bi bi-gear-fill"></i> Admin Panel
         </h2>
-        <a href="register.php" class="yellow-orange-button text-white font-semibold px-4 py-2 rounded-lg hover:shadow-lg flex items-center gap-2">
+        <a href="register.php" class="bg-white text-maroon font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 flex items-center gap-2">
           <i class="bi bi-person-plus-fill"></i> Add New User
         </a>
       </div>
@@ -171,7 +157,7 @@ $stmt->execute();
         <!-- User Management -->
         <div class="overflow-x-auto">
           <table class="min-w-full text-sm border rounded-lg">
-            <thead class="red-orange-table-header text-white">
+            <thead class="maroon-table-header text-white">
               <tr>
                 <th class="py-3 px-4 text-left">ID</th>
                 <th class="py-3 px-4 text-left">Username</th>
@@ -180,24 +166,24 @@ $stmt->execute();
                 <th class="py-3 px-4 text-left">Actions</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-orange-100">
+            <tbody class="divide-y divide-gray-100">
               <?php foreach ($users as $user): ?>
-              <tr class="red-orange-table-row hover:shadow transition-all duration-200">
+              <tr class="maroon-table-row hover:shadow transition-all duration-200">
                 <td class="py-2 px-4"><?php echo $user['id']; ?></td>
                 <td class="py-2 px-4"><?php echo htmlspecialchars($user['username']); ?></td>
                 <td class="py-2 px-4"><?php echo htmlspecialchars($user['full_name']); ?></td>
                 <td class="py-2 px-4">
                   <span class="px-2 py-1 text-xs font-semibold rounded-full 
-                    <?php echo $user['role'] === 'admin' ? 'red-orange-badge-admin' : 'red-orange-badge-user'; ?>">
+                    <?php echo $user['role'] === 'admin' ? 'maroon-badge-admin' : 'maroon-badge-user'; ?>">
                     <?php echo ucfirst($user['role']); ?>
                   </span>
                 </td>
                 <td class="py-2 px-4 flex gap-2">
-                  <a href="edit_user.php?id=<?php echo $user['id']; ?>" class="inline-flex items-center gap-1 px-3 py-1 yellow-orange-button text-white rounded hover:shadow text-xs font-semibold transition-all">
+                  <a href="edit_user.php?id=<?php echo $user['id']; ?>" class="inline-flex items-center gap-1 px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-xs font-semibold transition-all">
                     <i class="bi bi-pencil-square"></i> Edit
                   </a>
                   <?php if ($user['id'] != $_SESSION['user_id']): ?>
-                  <button onclick="confirmDelete(<?php echo $user['id']; ?>)" class="inline-flex items-center gap-1 px-3 py-1 red-orange-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
+                  <button onclick="confirmDelete(<?php echo $user['id']; ?>)" class="inline-flex items-center gap-1 px-3 py-1 maroon-gradient-button text-white rounded hover:shadow text-xs font-semibold transition-all">
                     <i class="bi bi-trash"></i> Delete
                   </button>
                   <?php endif; ?>
@@ -210,12 +196,12 @@ $stmt->execute();
 
         <!-- System Info -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
-          <div class="red-orange-gradient-card-light p-5 rounded-lg border-l-4 border-orange-500 shadow-sm">
-            <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="bi bi-info-circle text-orange-600"></i> PHP Version</h3>
+          <div class="maroon-gradient-light p-5 rounded-lg border-l-4 border-maroon shadow-sm">
+            <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="bi bi-info-circle text-maroon"></i> PHP Version</h3>
             <p class="text-gray-600 mt-2"><?php echo phpversion(); ?></p>
           </div>
-          <div class="red-orange-gradient-card-light p-5 rounded-lg border-l-4 border-orange-500 shadow-sm">
-            <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="bi bi-database text-orange-600"></i> Database</h3>
+          <div class="maroon-gradient-light p-5 rounded-lg border-l-4 border-maroon shadow-sm">
+            <h3 class="font-semibold text-gray-800 flex items-center gap-2"><i class="bi bi-database text-maroon"></i> Database</h3>
             <p class="text-gray-600 mt-2">MySQL <?php echo $conn->server_info; ?></p>
           </div>
         </div>
@@ -224,7 +210,7 @@ $stmt->execute();
   </main>
 
   <!-- Footer -->
-  <footer class="red-orange-gradient text-white py-4 mt-8">
+  <footer class="maroon-gradient text-white py-4 mt-8">
     <div class="max-w-7xl mx-auto px-6 text-center">
       <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
     </div>

@@ -1576,15 +1576,7 @@ document.addEventListener('click', function(e) {
         field.readOnly = true;
         field.classList.add('bg-gray-100', 'text-gray-500', 'cursor-not-allowed', 'border-gray-300');
         
-        // Add staff-only badge next to the field
-        const staffBadge = document.createElement('span');
-        staffBadge.className = 'ml-2 bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded font-medium';
-        staffBadge.textContent = 'STAFF ONLY';
-        
-        // Insert badge after the field
-        if (field.parentNode) {
-            field.parentNode.insertBefore(staffBadge, field.nextSibling);
-        }
+    
         
         // Add placeholder text for disabled fields
         if (field.tagName === 'INPUT' && !field.value) {

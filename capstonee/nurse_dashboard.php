@@ -1096,7 +1096,7 @@ function getActivityBg($activity_type) {
 
     <script>
     // Tab switching functionality
-  function switchTab(tabId) {
+function switchTab(tabId) {
     console.log('Switching to tab:', tabId);
     
     // Update tab links
@@ -1128,6 +1128,13 @@ function getActivityBg($activity_type) {
         // Resize iframes when switching to verification or consult tabs
         if (tabId === 'verification' || tabId === 'consult') {
             setTimeout(resizeAllIframes, 100);
+        }
+        
+        // Clean up analytics back button state if switching away from analytics
+        const analyticsContent = document.getElementById('analytics-content');
+        if (tabId !== 'analytics' && analyticsContent && analyticsContent.dataset.originalContent) {
+            // Restore original content when switching away from analytics
+            analyticsContent.innerHTML = analyticsContent.dataset.originalContent;
         }
     }
 
@@ -1628,12 +1635,14 @@ function openAnalyticsDashboard() {
     // Replace the current analytics tab content with an iframe
     const analyticsContent = document.getElementById('analytics-content');
     
-    // First, add a back button in the main content area (outside the iframe container)
-    const mainContentArea = document.querySelector('.main-content');
+    // Store original analytics content for restoration
+    if (!analyticsContent.dataset.originalContent) {
+        analyticsContent.dataset.originalContent = analyticsContent.innerHTML;
+    }
     
-    // Create back button container
+    // Create back button (will be placed INSIDE the analytics tab, not in main content)
     const backButtonContainer = document.createElement('div');
-    backButtonContainer.className = 'mb-4';
+    backButtonContainer.className = 'mb-4 p-4';
     backButtonContainer.innerHTML = `
         <button onclick="goBackToAnalyticsTab()" 
                 class="inline-flex items-center gap-2 bg-white text-maroon font-semibold px-4 py-2 rounded-lg shadow hover:bg-gray-50 transition-all border border-gray-200">
@@ -1641,24 +1650,27 @@ function openAnalyticsDashboard() {
         </button>
     `;
     
-    // Insert the back button at the beginning of the main content area
-    mainContentArea.insertBefore(backButtonContainer, analyticsContent);
+    // Replace analytics content with iframe and back button
+    analyticsContent.innerHTML = '';
+    analyticsContent.appendChild(backButtonContainer);
     
-    // Then replace the analytics content with iframe
-    analyticsContent.innerHTML = `
-        <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
-            <iframe 
-                src="modules/analytics/analytics_dashboard.php" 
-                frameborder="0" 
-                class="w-full h-full fullscreen-iframe"
-                style="border: none;"
-            ></iframe>
-        </div>
+    // Create iframe container
+    const iframeContainer = document.createElement('div');
+    iframeContainer.className = 'bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container';
+    iframeContainer.innerHTML = `
+        <iframe 
+            src="modules/analytics/analytics_dashboard.php" 
+            frameborder="0" 
+            class="w-full h-full fullscreen-iframe"
+            style="border: none;"
+        ></iframe>
     `;
+    
+    analyticsContent.appendChild(iframeContainer);
     
     // Resize the iframe to fit properly
     setTimeout(() => {
-        const iframe = analyticsContent.querySelector('iframe');
+        const iframe = iframeContainer.querySelector('iframe');
         if (iframe) {
             const header = document.querySelector('header');
             const footer = document.querySelector('.page-footer');
@@ -1673,8 +1685,12 @@ function openAnalyticsDashboard() {
 
 // Function to go back to analytics tab (show the preview content)
 function goBackToAnalyticsTab() {
-    // Reload the page to go back to the original analytics tab content
-    location.reload();
+    const analyticsContent = document.getElementById('analytics-content');
+    
+    // Restore original analytics content
+    if (analyticsContent.dataset.originalContent) {
+        analyticsContent.innerHTML = analyticsContent.dataset.originalContent;
+    }
 }
 
     </script>

@@ -380,6 +380,115 @@ function getActivityBg($activity_type) {
         .pulse-badge {
             animation: pulse-badge 2s infinite;
         }
+
+        /* Iframe loading styles */
+        #patients-loading {
+            animation: fadeIn 0.3s ease;
+        }
+
+        #patients-iframe-container iframe {
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Spinner for loading */
+        .spinner-border {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            vertical-align: text-bottom;
+            border: 0.25em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border .75s linear infinite;
+        }
+
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Add this to your existing styles */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Important for flex children to scroll */
+        }
+
+        .tab-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        /* For patients tab only */
+        #patients-content.active ~ .page-footer {
+            margin-top: 0;
+        }
+
+        #patients-content.active {
+            margin: -1.5rem; /* Counteract the p-6 from main-content */
+        }
+
+        /* Fix for patients tab only */
+        #patients-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        #patients-content .bg-white {
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* FIX: Full-screen iframe styles */
+        .fullscreen-iframe-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .fullscreen-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Ensure iframe takes full space */
+        .tab-panel > .bg-white {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+        }
+
+        #patients-content,
+        #admin-content {
+            position: relative;
+        }
+
+        #patients-content > .bg-white,
+        #admin-content > .bg-white {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
     </style>
 </head>
 <body class="bg-maroon-light">
@@ -733,41 +842,44 @@ function getActivityBg($activity_type) {
             </div>
 
             <!-- Patients Tab -->
-            <div id="patients-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-people-fill text-maroon"></i> Patient Management
-                    </h2>
-                    <p class="text-gray-600 mb-6">View and manage all patient records</p>
-                    
-                    <div class="mb-6">
-                        <a href="modules/records/patients.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-person-plus"></i> Manage All Patients
-                        </a>
+            <div id="patients-content" class="tab-panel hidden" style="display: none !important;">
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full">
+                    <!-- Loading indicator -->
+                    <div id="patients-loading" class="h-full flex items-center justify-center" style="display: none;">
+                        <div class="text-center">
+                            <div class="spinner-border text-maroon" role="status">
+                                <span class="sr-only">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-gray-600">Loading patient management...</p>
+                        </div>
                     </div>
                     
-                    <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-maroon mb-3 flex items-center gap-2">
-                            <i class="bi bi-info-circle-fill"></i> Patient Management Guidelines
-                        </h3>
-                        <ul class="space-y-2 text-gray-700">
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Search patients by name, student ID, or program</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>View complete patient medical history</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Update patient information as needed</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Export patient data for reporting</span>
-                            </li>
-                        </ul>
+                    <!-- Content container -->
+                    <div id="patients-iframe-container" class="hidden h-full" style="display: none;">
+                        <iframe 
+                            id="patients-iframe"
+                            src=""
+                            frameborder="0"
+                            class="w-full h-full fullscreen-iframe"
+                            style="border: none; display: none;"
+                            onload="hidePatientsLoading()"
+                        ></iframe>
+                    </div>
+                    
+                    <!-- Fallback content if iframe fails -->
+                    <div id="patients-fallback" class="hidden h-full flex items-center justify-center" style="display: none;">
+                        <div class="text-center p-6">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                                <i class="bi bi-people-fill text-maroon"></i> Patient Management
+                            </h2>
+                            <p class="text-gray-600 mb-6">View and manage all patient records</p>
+                            
+                            <div class="mb-6">
+                                <a href="modules/records/patients.php" target="_blank" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
+                                    <i class="bi bi-box-arrow-up-right"></i> Open Patients Management in New Tab
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -846,9 +958,9 @@ function getActivityBg($activity_type) {
                     <p class="text-gray-600 mb-6">View clinic statistics and reports</p>
                     
                     <div class="mb-8">
-                        <a href="modules/analytics/analytics_dashboard.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-bar-chart"></i> Go to Analytics Dashboard
-                        </a>
+                        <button onclick="openAnalyticsDashboard()" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
+                            <i class="bi bi-bar-chart"></i> Open Analytics Dashboard
+                        </button>
                     </div>
                     
                     <!-- Summary Stats -->
@@ -914,41 +1026,13 @@ function getActivityBg($activity_type) {
 
             <!-- Admin Panel Tab -->
             <div id="admin-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-person-badge text-maroon"></i> Admin Panel
-                    </h2>
-                    <p class="text-gray-600 mb-6">System administration and management</p>
-                    
-                    <div class="mb-6">
-                        <a href="admin_panel.php" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-gear"></i> Go to Admin Panel
-                        </a>
-                    </div>
-                    
-                    <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-maroon mb-3 flex items-center gap-2">
-                            <i class="bi bi-info-circle-fill"></i> Admin Functions
-                        </h3>
-                        <ul class="space-y-2 text-gray-700">
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>User management and role assignments</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>System configuration and settings</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Backup and data management</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Reports generation and exports</span>
-                            </li>
-                        </ul>
-                    </div>
+                <div class="bg-white rounded-xl shadow-md p-0 overflow-hidden flex-1 h-full fullscreen-iframe-container">
+                    <iframe 
+                        src="admin_panel.php" 
+                        frameborder="0" 
+                        class="w-full h-full fullscreen-iframe"
+                        style="border: none;"
+                    ></iframe>
                 </div>
             </div>
 
@@ -1122,6 +1206,8 @@ function getActivityBg($activity_type) {
     <script>
     // Tab switching functionality
     function switchTab(tabId) {
+        console.log('Switching to tab:', tabId);
+        
         // Update tab links
         document.querySelectorAll('.tab-link').forEach(link => {
             link.classList.remove('active');
@@ -1130,16 +1216,38 @@ function getActivityBg($activity_type) {
             }
         });
 
-        // Update tab content
+        // Hide all tab panels
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.add('hidden');
-            panel.classList.remove('active');
+            panel.style.display = 'none';
         });
 
+        // Show the active tab panel
         const activePanel = document.getElementById(tabId + '-content');
         if (activePanel) {
             activePanel.classList.remove('hidden');
-            activePanel.classList.add('active');
+            activePanel.style.display = 'flex';
+            
+            // Special handling for patients tab
+            if (tabId === 'patients') {
+                console.log('Loading patients tab');
+                loadPatientsContent();
+            }
+            
+            // Resize iframes when switching to admin tab
+            if (tabId === 'admin') {
+                setTimeout(resizeAllIframes, 100);
+            }
+            
+            // If switching to analytics tab, restore original content if it was replaced
+            if (tabId === 'analytics') {
+                const analyticsContent = document.getElementById('analytics-content');
+                const originalContent = analyticsContent.getAttribute('data-original-content');
+                if (originalContent) {
+                    analyticsContent.innerHTML = originalContent;
+                    analyticsContent.removeAttribute('data-original-content');
+                }
+            }
         }
 
         // Save tab selection
@@ -1388,6 +1496,78 @@ function getActivityBg($activity_type) {
         }, 2000);
     }
 
+    // Function to resize all iframes
+    function resizeAllIframes() {
+        // Resize admin iframe
+        const adminIframe = document.querySelector('#admin-content iframe');
+        if (adminIframe) {
+            resizeAdminIframe(adminIframe);
+        }
+        
+        // Resize patients iframe
+        const patientsIframe = document.getElementById('patients-iframe');
+        if (patientsIframe && patientsIframe.style.display !== 'none') {
+            resizePatientsIframe(patientsIframe);
+        }
+    }
+
+    function resizeAdminIframe(iframe) {
+        if (!iframe) return;
+        
+        const adminContent = document.getElementById('admin-content');
+        if (!adminContent) return;
+        
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - headerHeight - footerHeight;
+        
+        // Set iframe height
+        iframe.style.height = Math.max(600, availableHeight) + 'px';
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - headerHeight - footerHeight;
+            iframe.style.height = Math.max(600, newAvailableHeight) + 'px';
+        });
+    }
+
+    function resizePatientsIframe(iframe) {
+        if (!iframe) return;
+        
+        // Get the patients content container
+        const patientsContent = document.getElementById('patients-content');
+        if (!patientsContent) return;
+        
+        // Calculate available height
+        const header = document.querySelector('header');
+        const footer = document.querySelector('.page-footer');
+        const mainContent = document.querySelector('.main-content');
+        
+        const headerHeight = header ? header.offsetHeight : 0;
+        const footerHeight = footer ? footer.offsetHeight : 0;
+        const mainContentTop = mainContent ? mainContent.getBoundingClientRect().top : 0;
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const availableHeight = windowHeight - mainContentTop - footerHeight - 20; // 20px buffer
+        
+        // Set iframe height
+        iframe.style.height = Math.max(500, availableHeight) + 'px';
+        console.log('Patients iframe resized to:', iframe.style.height);
+        
+        // Also resize on window resize
+        window.addEventListener('resize', function() {
+            const newAvailableHeight = window.innerHeight - mainContentTop - footerHeight - 20;
+            iframe.style.height = Math.max(500, newAvailableHeight) + 'px';
+        });
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         updateTime();
@@ -1395,6 +1575,7 @@ function getActivityBg($activity_type) {
         
         // Load saved tab
         const savedTab = localStorage.getItem('adminSelectedTab') || 'dashboard';
+        console.log('Initial tab:', savedTab);
         switchTab(savedTab);
         
         // Tab click handlers
@@ -1435,8 +1616,171 @@ function getActivityBg($activity_type) {
             if (window.innerWidth > 1024) {
                 closeMobileMenu();
             }
+            // Resize iframes on window resize
+            resizeAllIframes();
         });
+
+        // Add iframe error handling
+        const iframe = document.getElementById('patients-iframe');
+        if (iframe) {
+            iframe.addEventListener('error', function() {
+                console.error('Failed to load patients iframe');
+                showPatientsFallback();
+            });
+            
+            // Check if iframe loads successfully within 10 seconds
+            setTimeout(() => {
+                const loadingEl = document.getElementById('patients-loading');
+                if (loadingEl && !loadingEl.classList.contains('hidden')) {
+                    showPatientsFallback();
+                }
+            }, 10000);
+        }
+        
+        // Initial resize of iframes
+        setTimeout(resizeAllIframes, 500);
     });
+
+    function loadPatientsContent() {
+        console.log('Loading patients content');
+        
+        // Get elements
+        const loadingEl = document.getElementById('patients-loading');
+        const containerEl = document.getElementById('patients-iframe-container');
+        const fallbackEl = document.getElementById('patients-fallback');
+        const iframeEl = document.getElementById('patients-iframe');
+        
+        // Show loading, hide others
+        if (loadingEl) {
+            loadingEl.style.display = 'flex';
+            loadingEl.classList.remove('hidden');
+        }
+        if (containerEl) {
+            containerEl.style.display = 'none';
+            containerEl.classList.add('hidden');
+        }
+        if (fallbackEl) {
+            fallbackEl.style.display = 'none';
+            fallbackEl.classList.add('hidden');
+        }
+        if (iframeEl) {
+            iframeEl.style.display = 'none';
+            // Load the patients page
+            iframeEl.src = "modules/records/patients.php";
+        }
+    }
+
+    function hidePatientsLoading() {
+        console.log('Iframe loaded, hiding loading');
+        
+        const loadingEl = document.getElementById('patients-loading');
+        const containerEl = document.getElementById('patients-iframe-container');
+        const iframe = document.getElementById('patients-iframe');
+        
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+            loadingEl.classList.add('hidden');
+        }
+        if (containerEl) {
+            containerEl.style.display = 'block';
+            containerEl.classList.remove('hidden');
+        }
+        if (iframe) {
+            iframe.style.display = 'block';
+            // Resize iframe to fit
+            resizePatientsIframe(iframe);
+        }
+    }
+
+    function showPatientsFallback() {
+        const loadingEl = document.getElementById('patients-loading');
+        const containerEl = document.getElementById('patients-iframe-container');
+        const fallbackEl = document.getElementById('patients-fallback');
+        
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+            loadingEl.classList.add('hidden');
+        }
+        if (containerEl) {
+            containerEl.style.display = 'none';
+            containerEl.classList.add('hidden');
+        }
+        if (fallbackEl) {
+            fallbackEl.style.display = 'flex';
+            fallbackEl.classList.remove('hidden');
+        }
+    }
+
+    // Function for analytics dashboard
+    function openAnalyticsDashboard() {
+        // Replace the current analytics tab content with an iframe
+        const analyticsContent = document.getElementById('analytics-content');
+        
+        // Save the original content first
+        const originalContent = analyticsContent.innerHTML;
+        
+        // Create a container for the iframe that includes a back button
+        analyticsContent.innerHTML = `
+            <div class="bg-white rounded-xl shadow-md p-6 flex-1 h-full flex flex-col">
+                <div class="mb-4">
+                    <button onclick="restoreAnalyticsTab()" 
+                            class="inline-flex items-center gap-2 bg-white text-maroon font-semibold px-4 py-2 rounded-lg shadow hover:bg-gray-50 transition-all border border-gray-200">
+                        <i class="bi bi-arrow-left-circle"></i> Back
+                    </button>
+                </div>
+                <div class="flex-1 min-h-0">
+                    <iframe 
+                        src="modules/analytics/analytics_dashboard.php" 
+                        frameborder="0" 
+                        class="w-full h-full"
+                        style="border: none;"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+        
+        // Store the original content in a data attribute for restoration
+        analyticsContent.setAttribute('data-original-content', originalContent);
+        
+        // Resize the iframe to fit properly
+        setTimeout(() => {
+            const iframe = analyticsContent.querySelector('iframe');
+            if (iframe) {
+                const header = document.querySelector('header');
+                const footer = document.querySelector('.page-footer');
+                const mainContent = document.querySelector('.main-content');
+                
+                const headerHeight = header ? header.offsetHeight : 0;
+                const footerHeight = footer ? footer.offsetHeight : 0;
+                const mainContentTop = mainContent ? mainContent.getBoundingClientRect().top : 0;
+                
+                const windowHeight = window.innerHeight;
+                const availableHeight = windowHeight - mainContentTop - footerHeight - 100; // Account for back button
+                
+                iframe.style.height = Math.max(600, availableHeight) + 'px';
+                
+                // Also resize on window resize
+                window.addEventListener('resize', function() {
+                    const newAvailableHeight = window.innerHeight - mainContentTop - footerHeight - 100;
+                    iframe.style.height = Math.max(600, newAvailableHeight) + 'px';
+                });
+            }
+        }, 100);
+    }
+
+    // Function to restore analytics tab to original content
+    function restoreAnalyticsTab() {
+        const analyticsContent = document.getElementById('analytics-content');
+        const originalContent = analyticsContent.getAttribute('data-original-content');
+        
+        if (originalContent) {
+            analyticsContent.innerHTML = originalContent;
+            analyticsContent.removeAttribute('data-original-content');
+        } else {
+            // Fallback: reload the page
+            location.reload();
+        }
+    }
     </script>
 </body>
 </html>
