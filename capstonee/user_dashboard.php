@@ -611,6 +611,23 @@ $user_submissions_result = $stmt->get_result();
         .bg-maroon-light {
             background-color: #fff5f5;
         }
+        
+        /* Iframe styles for medical diagnoses */
+        .diagnosis-iframe-container {
+            width: 100%;
+            height: calc(100vh - 200px);
+            min-height: 600px;
+            border: none;
+            overflow: hidden;
+        }
+        
+        .diagnosis-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="bg-maroon-light">
@@ -932,73 +949,10 @@ $user_submissions_result = $stmt->get_result();
                     </h2>
                     <p class="text-gray-600 mb-6">View your medical diagnoses and findings from healthcare providers</p>
 
-                    <?php if ($diagnosis_count > 0): ?>
-                        <!-- Diagnoses List -->
-                        <div class="space-y-4">
-                            <!-- This would be populated with actual diagnoses from the database -->
-                            <div class="bg-gray-50 hover:bg-gray-100 p-5 rounded-lg border border-gray-200 transition-all duration-200">
-                                <div class="flex items-start justify-between">
-                                    <div class="flex items-start gap-4">
-                                        <div class="bg-red-100 p-3 rounded-full">
-                                            <i class="bi bi-heart-pulse-fill text-red-600"></i>
-                                        </div>
-                                        <div>
-                                            <h4 class="font-semibold text-gray-800 mb-1">General Checkup Findings</h4>
-                                            <p class="text-gray-600 text-sm mb-2">From: Dr. Maria Santos - General Physician</p>
-                                            <p class="text-gray-700">Patient is in good health. Mild vitamin D deficiency noted. Recommended dietary supplements.</p>
-                                            <p class="text-xs text-gray-500 mt-2">Diagnosed: October 15, 2024</p>
-                                        </div>
-                                    </div>
-                                    <span class="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-semibold">
-                                        COMPLETED
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="bg-gray-50 hover:bg-gray-100 p-5 rounded-lg border border-gray-200 transition-all duration-200">
-                                <div class="flex items-start justify-between">
-                                    <div class="flex items-start gap-4">
-                                        <div class="bg-blue-100 p-3 rounded-full">
-                                            <i class="bi bi-tooth text-blue-600"></i>
-                                        </div>
-                                        <div>
-                                            <h4 class="font-semibold text-gray-800 mb-1">Dental Examination Results</h4>
-                                            <p class="text-gray-600 text-sm mb-2">From: Dr. Juan Dela Cruz - Dentist</p>
-                                            <p class="text-gray-700">Two cavities detected (teeth #3 and #14). Recommended dental filling appointments.</p>
-                                            <p class="text-xs text-gray-500 mt-2">Diagnosed: September 28, 2024</p>
-                                        </div>
-                                    </div>
-                                    <span class="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full font-semibold">
-                                        PENDING TREATMENT
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- View All Button -->
-                        <div class="mt-6 text-center">
-                            <a href="my_diagnoses.php" class="inline-flex items-center gap-2 maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
-                                <i class="bi bi-arrow-right-circle"></i> View All Diagnoses
-                            </a>
-                        </div>
-                    <?php else: ?>
-                        <!-- No Diagnoses State -->
-                        <div class="text-center py-12">
-                            <div class="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <i class="bi bi-clipboard2-heart text-gray-400 text-3xl"></i>
-                            </div>
-                            <h3 class="text-xl font-semibold text-gray-700 mb-2">No diagnoses found</h3>
-                            <p class="text-gray-500 mb-6">You haven't received any medical diagnoses yet.</p>
-                            <div class="flex flex-col sm:flex-row gap-3 justify-center">
-                                <a href="#clinic-forms" onclick="switchTab('clinic-forms')" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
-                                    <i class="bi bi-clipboard2-plus"></i> Submit Medical Forms
-                                </a>
-                                <a href="#" class="bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all">
-                                    <i class="bi bi-question-circle"></i> Learn More
-                                </a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+                    <!-- Diagnosis Content as iframe -->
+                    <div class="diagnosis-iframe-container">
+                        <iframe src="my_diagnoses.php" class="diagnosis-iframe" id="diagnosisIframe" title="Medical Diagnoses"></iframe>
+                    </div>
                 </div>
             </div>
 
@@ -1244,6 +1198,25 @@ $user_submissions_result = $stmt->get_result();
         // Close mobile menu on mobile devices
         if (window.innerWidth <= 1024) {
             closeMobileMenu();
+        }
+        
+        // Adjust iframe height when switching to medical diagnoses tab
+        if (tabId === 'medical-diagnoses') {
+            setTimeout(adjustIframeHeight, 100);
+        }
+    }
+
+    // Function to adjust iframe height
+    function adjustIframeHeight() {
+        const iframe = document.getElementById('diagnosisIframe');
+        if (iframe) {
+            const container = iframe.parentElement;
+            const headerHeight = document.querySelector('header').offsetHeight;
+            const tabContentTop = document.querySelector('.main-content').offsetTop;
+            const availableHeight = window.innerHeight - headerHeight - tabContentTop - 100;
+            
+            iframe.style.height = availableHeight + 'px';
+            container.style.height = availableHeight + 'px';
         }
     }
 
@@ -2251,6 +2224,8 @@ document.getElementById('passwordModal').addEventListener('click', function(e) {
         if (window.innerWidth > 1024) {
             closeMobileMenu();
         }
+        // Adjust iframe height on resize
+        adjustIframeHeight();
     });
 
     // Listen for messages from password modal
@@ -2557,6 +2532,11 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         loadSelectedTab();
     }, 100);
+    
+    // Adjust iframe height on initial load
+    setTimeout(() => {
+        adjustIframeHeight();
+    }, 200);
 });
 
 

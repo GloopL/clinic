@@ -415,9 +415,7 @@ if ($is_ajax_request) {
                         </div>
                     </div>
                     <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="add_patient.php" class="inline-flex items-center gap-2 bg-white text-maroon font-semibold px-4 py-2 rounded-lg shadow hover:bg-gray-50 transition-all">
-                            <i class="bi bi-plus-circle"></i> Add New Patient
-                        </a>
+                        
                         <div class="bg-white bg-opacity-20 border border-white border-opacity-30 rounded-lg px-4 py-2 text-center">
                             <span class="text-sm text-gray-200">Total Patients:</span>
                             <span class="text-xl font-bold text-white block"><?php echo $total_patients; ?></span>

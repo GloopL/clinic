@@ -21,7 +21,7 @@ if (in_array($_SESSION['role'], $restrictedRoles)) {
 // Get user profile information
 $user_id = $_SESSION['user_id'];
 $user_profile = $conn->query("
-    SELECT username, email, created_at
+    SELECT username, email, full_name, created_at
     FROM users
     WHERE id = $user_id
 ")->fetch_assoc();
@@ -33,26 +33,31 @@ $patient_info = $conn->query("
 
 // Get full name for display
 $display_name = $_SESSION['username'];
-$check_user_details = $conn->query("SHOW TABLES LIKE 'user_details'");
-if ($check_user_details->num_rows > 0) {
-    $user_details = $conn->query("SELECT full_name FROM user_details WHERE user_id = $user_id");
-    if ($user_details && $user_details->num_rows > 0) {
-        $details = $user_details->fetch_assoc();
-        if (!empty($details['full_name'])) {
-            $display_name = trim($details['full_name']);
+if (!empty($user_profile['full_name'])) {
+    $display_name = trim($user_profile['full_name']);
+} else {
+    // Fallback to user_details table if exists
+    $check_user_details = $conn->query("SHOW TABLES LIKE 'user_details'");
+    if ($check_user_details->num_rows > 0) {
+        $user_details = $conn->query("SELECT full_name FROM user_details WHERE user_id = $user_id");
+        if ($user_details && $user_details->num_rows > 0) {
+            $details = $user_details->fetch_assoc();
+            if (!empty($details['full_name'])) {
+                $display_name = trim($details['full_name']);
+            }
         }
     }
-}
-
-// If no full_name from user_details, construct from patient_info
-if ($display_name === $_SESSION['username'] && $patient_info) {
-    $name_parts = array_filter([
-        $patient_info['first_name'] ?? '',
-        $patient_info['middle_name'] ?? '',
-        $patient_info['last_name'] ?? ''
-    ]);
-    if (!empty($name_parts)) {
-        $display_name = implode(' ', $name_parts);
+    
+    // If still no full_name, construct from patient_info
+    if ($display_name === $_SESSION['username'] && $patient_info) {
+        $name_parts = array_filter([
+            $patient_info['first_name'] ?? '',
+            $patient_info['middle_name'] ?? '',
+            $patient_info['last_name'] ?? ''
+        ]);
+        if (!empty($name_parts)) {
+            $display_name = implode(' ', $name_parts);
+        }
     }
 }
 
@@ -66,7 +71,6 @@ function getProviderFullName($conn, $provider_username) {
     $provider_username = trim($provider_username);
     
     // First, check if it's already a full name (contains spaces and doesn't match username pattern)
-    // If it looks like a full name (has spaces, doesn't match typical username patterns), return as-is
     if (strpos($provider_username, ' ') !== false && !preg_match('/^[a-z0-9_-]+$/i', $provider_username)) {
         // It might already be a full name, but let's verify it's not a username
         $check_query = $conn->prepare("SELECT username FROM users WHERE BINARY username = ? LIMIT 1");
@@ -77,13 +81,12 @@ function getProviderFullName($conn, $provider_username) {
         // If it's NOT a username in the database, treat it as a full name
         if ($check_result->num_rows == 0) {
             $check_query->close();
-            return $provider_username; // Return as-is if it's already a full name
+            return $provider_username;
         }
         $check_query->close();
     }
     
     // Try to find by username in users table (for staff: doctors, dentists, nurses)
-    // Use BINARY comparison for case-sensitive matching
     $user_query = $conn->prepare("
         SELECT u.full_name, u.id, u.username, u.role
         FROM users u
@@ -149,7 +152,7 @@ function getProviderFullName($conn, $provider_username) {
     return $provider_username;
 }
 
-// Get filter parameter
+// Get filter parameter - now by form type
 $filter_type = isset($_GET['filter']) ? $_GET['filter'] : 'all';
 
 // Fetch diagnoses for the current patient
@@ -157,29 +160,34 @@ $diagnoses = [];
 if ($patient_info && isset($patient_info['id'])) {
     $patient_id_for_diagnoses = $patient_info['id'];
     
-    // Build query with filter
-    $where_clause = "WHERE md.patient_id = ?";
+    // Build base query
+    $base_query = "
+        SELECT md.id, md.record_id, md.diagnosis_type, md.diagnosis_date, md.provider_name, md.provider_role,
+               md.chief_complaint, md.subjective_findings, md.objective_findings, 
+               md.assessment, md.plan, md.medications_prescribed, md.follow_up_required,
+               md.follow_up_date, md.severity, md.status, md.notes, md.created_at,
+               md.nurse_note, md.nurse_diagnosis_date, md.doctor_note, md.doctor_diagnosis_date,
+               COALESCE(u.full_name, md.provider_name) as provider_full_name,
+               mr.record_type
+        FROM medical_diagnoses md
+        LEFT JOIN users u ON BINARY u.username = md.provider_name
+        LEFT JOIN medical_records mr ON md.record_id = mr.id
+        WHERE md.patient_id = ?
+    ";
+    
     $params = [$patient_id_for_diagnoses];
     $types = "i";
     
+    // Add form type filter if not 'all'
     if ($filter_type !== 'all') {
-        $where_clause .= " AND md.diagnosis_type = ?";
+        $base_query .= " AND mr.record_type = ?";
         $params[] = $filter_type;
         $types .= "s";
     }
     
-    $diagnoses_query = $conn->prepare("
-        SELECT md.id, md.diagnosis_type, md.diagnosis_date, md.provider_name, md.provider_role,
-               md.chief_complaint, md.subjective_findings, md.objective_findings, 
-               md.assessment, md.plan, md.medications_prescribed, md.follow_up_required,
-               md.follow_up_date, md.severity, md.status, md.notes, md.created_at,
-               COALESCE(u.full_name, md.provider_name) as provider_full_name
-        FROM medical_diagnoses md
-        LEFT JOIN users u ON BINARY u.username = md.provider_name
-        $where_clause
-        ORDER BY md.diagnosis_date DESC, md.created_at DESC
-    ");
+    $base_query .= " ORDER BY md.diagnosis_date DESC, md.created_at DESC";
     
+    $diagnoses_query = $conn->prepare($base_query);
     $diagnoses_query->bind_param($types, ...$params);
     $diagnoses_query->execute();
     $diagnoses_result = $diagnoses_query->get_result();
@@ -195,14 +203,15 @@ if ($patient_info && isset($patient_info['id'])) {
     $diagnoses_query->close();
 }
 
-// Get counts for filter badges
-$counts = ['all' => 0, 'doctor' => 0, 'dentist' => 0, 'nurse' => 0];
+// Get counts for filter badges by form type
+$counts = ['all' => 0, 'history_form' => 0, 'medical_exam' => 0, 'dental_exam' => 0];
 if ($patient_info && isset($patient_info['id'])) {
     $count_query = $conn->prepare("
-        SELECT diagnosis_type, COUNT(*) as count
-        FROM medical_diagnoses
-        WHERE patient_id = ?
-        GROUP BY diagnosis_type
+        SELECT mr.record_type, COUNT(*) as count
+        FROM medical_diagnoses md
+        JOIN medical_records mr ON md.record_id = mr.id
+        WHERE md.patient_id = ?
+        GROUP BY mr.record_type
     ");
     $count_query->bind_param("i", $patient_info['id']);
     $count_query->execute();
@@ -210,7 +219,7 @@ if ($patient_info && isset($patient_info['id'])) {
     
     $total = 0;
     while ($row = $count_result->fetch_assoc()) {
-        $counts[$row['diagnosis_type']] = $row['count'];
+        $counts[$row['record_type']] = $row['count'];
         $total += $row['count'];
     }
     $counts['all'] = $total;
@@ -251,24 +260,119 @@ function generateDefaultAvatar($username) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        .red-orange-gradient {
-            background: linear-gradient(135deg, #dc2626, #ea580c, #f97316);
+        /* Custom maroon theme (#800000) */
+        :root {
+            --maroon-primary: #800000;
+            --maroon-dark: #660000;
+            --maroon-light: #a00000;
+            --maroon-bg: #fff5f5;
         }
         
-        .red-orange-gradient-button {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+        .maroon-gradient {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
         }
         
-        .red-orange-gradient-button:hover {
-            background: linear-gradient(135deg, #b91c1c, #c2410c);
+        .maroon-gradient-light {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
         }
         
+        .maroon-gradient-card {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        .maroon-gradient-button {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        .maroon-gradient-button:hover {
+            background: linear-gradient(135deg, var(--maroon-dark), var(--maroon-primary));
+        }
+        
+        .maroon-gradient-alert {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+            border-left-color: var(--maroon-primary);
+        }
+        
+        .maroon-table-header {
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
+        }
+        
+        .maroon-table-row {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+        }
+        
+        .maroon-table-row:hover {
+            background: linear-gradient(135deg, #ffe5e5, #ffcccc);
+        }
+        
+        .maroon-badge {
+            background: linear-gradient(135deg, #ffcccc, #ffb3b3);
+            color: #800000;
+        }
+        
+        .maroon-badge-verified {
+            background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+            color: #166534;
+        }
+        
+        .maroon-badge-pending {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+        }
+        
+        .maroon-badge-rejected {
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            color: #991b1b;
+        }
+        
+        .stats-card-1 {
+            background: linear-gradient(135deg, var(--maroon-primary), #990000);
+        }
+        
+        .stats-card-2 {
+            background: linear-gradient(135deg, #990000, #b30000);
+        }
+        
+        .stats-card-3 {
+            background: linear-gradient(135deg, #b30000, #cc0000);
+        }
+        
+        .form-card-history {
+            background: linear-gradient(135deg, var(--maroon-primary), #990000);
+        }
+        
+        .form-card-dental {
+            background: linear-gradient(135deg, #990000, #b30000);
+        }
+        
+        .form-card-medical {
+            background: linear-gradient(135deg, #b30000, #cc0000);
+        }
+        
+        /* Text colors for maroon theme */
+        .text-maroon {
+            color: var(--maroon-primary);
+        }
+        
+        .text-maroon-light {
+            color: var(--maroon-light);
+        }
+        
+        .border-maroon {
+            border-color: var(--maroon-primary);
+        }
+        
+        .bg-maroon-light {
+            background-color: #fff5f5;
+        }
+        
+        /* Filter button styles */
         .filter-btn {
             transition: all 0.3s ease;
         }
         
         .filter-btn.active {
-            background: linear-gradient(135deg, #dc2626, #ea580c);
+            background: linear-gradient(135deg, var(--maroon-primary), var(--maroon-light));
             color: white;
             transform: scale(1.05);
         }
@@ -281,78 +385,42 @@ function generateDefaultAvatar($username) {
         
         .filter-btn:not(.active):hover {
             background: #f9fafb;
-            border-color: #ea580c;
+            border-color: var(--maroon-primary);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+            min-height: 100vh;
+            padding: 20px;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-orange-50 to-red-50 min-h-screen flex flex-col">
+<body>
 
-    <header class="red-orange-gradient text-white shadow-md sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-            <div class="flex items-center gap-3">
-                <img src="assets/css/images/logo-bsu.png" alt="BSU Logo" class="w-12 h-12 rounded-full object-cover border-4 border-white bg-white">
-                <h1 class="text-lg font-bold">BSU Clinic Record Management System</h1>
-            </div>
-            <nav class="flex items-center gap-6">
-                <a href="user_dashboard.php" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </a>
-                <a href="my_diagnoses.php" class="hover:text-yellow-200 flex items-center gap-1 font-semibold">
-                    <i class="bi bi-clipboard2-heart-fill"></i> My Diagnoses
-                </a>
-                <a href="update_user_profile.php" class="hover:text-yellow-200 flex items-center gap-1">
-                    <i class="bi bi-person-circle"></i> Profile
-                </a>
-                <a href="logout.php" class="red-orange-gradient-button text-white px-3 py-1 rounded-lg font-semibold hover:shadow-lg flex items-center gap-1">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </a>
-            </nav>
-        </div>
-    </header>
-
-    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
-        <!-- Page Header -->
-        <div class="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
-            <div class="red-orange-gradient px-8 py-6">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-red-800 text-xl font-bold border-4 border-white shadow-lg">
-                            <?php echo generateDefaultAvatar($display_name); ?>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold text-white mb-1">My Medical Diagnoses & Findings</h2>
-                            <p class="text-white text-sm opacity-90">View all diagnoses from doctors, dentists, and nurses</p>
-                        </div>
-                    </div>
-                    <a href="user_dashboard.php" class="bg-white text-orange-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
-                        <i class="bi bi-arrow-left"></i> Back to Dashboard
-                    </a>
-                </div>
-            </div>
-        </div>
-
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto">
         <!-- Filter Section -->
-        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800">Filter by Provider Type</h3>
+                <h3 class="text-lg font-semibold text-gray-800">Filter by Form Type</h3>
                 <span class="text-sm text-gray-600">Total: <?php echo $counts['all']; ?> diagnosis(es)</span>
             </div>
             <div class="flex flex-wrap gap-3">
                 <a href="?filter=all" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'all' ? 'active' : ''; ?>">
-                    <i class="bi bi-list-ul"></i> All
+                    <i class="bi bi-list-ul"></i> All Forms
                     <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['all']; ?></span>
                 </a>
-                <a href="?filter=doctor" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'doctor' ? 'active' : ''; ?>">
-                    <i class="bi bi-stethoscope"></i> Doctor
-                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['doctor']; ?></span>
+                <a href="?filter=history_form" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'history_form' ? 'active' : ''; ?>">
+                    <i class="bi bi-clipboard2-pulse-fill"></i> Medical History
+                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['history_form']; ?></span>
                 </a>
-                <a href="?filter=dentist" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'dentist' ? 'active' : ''; ?>">
-                    <i class="bi bi-tooth"></i> Dentist
-                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['dentist']; ?></span>
+                <a href="?filter=medical_exam" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'medical_exam' ? 'active' : ''; ?>">
+                    <i class="bi bi-heart-pulse"></i> Medical Exam
+                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['medical_exam']; ?></span>
                 </a>
-                <a href="?filter=nurse" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'nurse' ? 'active' : ''; ?>">
-                    <i class="bi bi-heart-pulse"></i> Nurse
-                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['nurse']; ?></span>
+                <a href="?filter=dental_exam" class="filter-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 <?php echo $filter_type === 'dental_exam' ? 'active' : ''; ?>">
+                    <i class="bi bi-tooth"></i> Dental Exam
+                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-xs"><?php echo $counts['dental_exam']; ?></span>
                 </a>
             </div>
         </div>
@@ -419,13 +487,43 @@ function generateDefaultAvatar($username) {
                         default:
                             $status_badge_class = 'bg-gray-100 text-gray-800';
                     }
+                    
+                    // Determine form type badge
+                    $form_badge_class = '';
+                    $form_icon = '';
+                    $form_display_name = '';
+                    switch($diagnosis['record_type']) {
+                        case 'history_form':
+                            $form_badge_class = 'bg-purple-100 text-purple-800';
+                            $form_icon = 'bi-clipboard2-pulse-fill';
+                            $form_display_name = 'Medical History Form';
+                            break;
+                        case 'medical_exam':
+                            $form_badge_class = 'bg-red-100 text-red-800';
+                            $form_icon = 'bi-heart-pulse';
+                            $form_display_name = 'Medical Examination Form';
+                            break;
+                        case 'dental_exam':
+                            $form_badge_class = 'bg-green-100 text-green-800';
+                            $form_icon = 'bi-tooth';
+                            $form_display_name = 'Dental Examination Form';
+                            break;
+                        default:
+                            $form_badge_class = 'bg-gray-100 text-gray-800';
+                            $form_icon = 'bi-clipboard';
+                            $form_display_name = ucfirst(str_replace('_', ' ', $diagnosis['record_type']));
+                    }
                 ?>
-                    <div class="border-l-4 border-orange-500 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-6 hover:shadow-lg transition-all duration-200">
+                    <div class="border-l-4 border-maroon bg-gradient-to-r from-maroon-bg to-white rounded-lg p-6 hover:shadow-lg transition-all duration-200">
                         <div class="flex items-start justify-between mb-4">
                             <div class="flex items-center gap-3">
-                                <div class="<?php echo $type_badge_class; ?> px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2">
+                                <div class="<?php echo $form_badge_class; ?> px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2">
+                                    <i class="bi <?php echo $form_icon; ?>"></i>
+                                    <?php echo $form_display_name; ?>
+                                </div>
+                                <div class="<?php echo $type_badge_class; ?> px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2">
                                     <i class="bi <?php echo $type_icon; ?>"></i>
-                                    <?php echo ucfirst($diagnosis['diagnosis_type']); ?> Diagnosis
+                                    <?php echo ucfirst($diagnosis['diagnosis_type']); ?>
                                 </div>
                                 <span class="text-sm text-gray-600 flex items-center gap-1">
                                     <i class="bi bi-calendar3"></i> <?php echo date('M j, Y', strtotime($diagnosis['diagnosis_date'])); ?>
@@ -447,12 +545,46 @@ function generateDefaultAvatar($username) {
                         
                         <div class="space-y-3">
                             <div class="bg-white p-3 rounded-lg border-l-2 border-blue-500">
-                                <span class="font-semibold text-gray-700">Provider:</span>
+                                <span class="font-semibold text-gray-700">Healthcare Provider:</span>
                                 <span class="text-gray-900 ml-2"><?php echo htmlspecialchars($diagnosis['provider_full_name'] ?? $diagnosis['provider_name']); ?></span>
                                 <?php if ($diagnosis['provider_role']): ?>
                                     <span class="text-gray-600 text-sm ml-2">(<?php echo htmlspecialchars($diagnosis['provider_role']); ?>)</span>
                                 <?php endif; ?>
                             </div>
+                            
+                            <!-- Display Nurse Notes and Date if available -->
+                            <?php if (!empty($diagnosis['nurse_note'])): ?>
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <span class="font-semibold text-blue-800 flex items-center gap-2">
+                                            <i class="bi bi-heart-pulse"></i> Nurse's Notes
+                                        </span>
+                                        <?php if (!empty($diagnosis['nurse_diagnosis_date'])): ?>
+                                            <span class="text-blue-600 text-sm">
+                                                <i class="bi bi-calendar"></i> <?php echo date('M j, Y', strtotime($diagnosis['nurse_diagnosis_date'])); ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <p class="text-gray-800"><?php echo nl2br(htmlspecialchars($diagnosis['nurse_note'])); ?></p>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <!-- Display Doctor Notes and Date if available -->
+                            <?php if (!empty($diagnosis['doctor_note'])): ?>
+                                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <span class="font-semibold text-red-800 flex items-center gap-2">
+                                            <i class="bi bi-stethoscope"></i> Doctor's Notes
+                                        </span>
+                                        <?php if (!empty($diagnosis['doctor_diagnosis_date'])): ?>
+                                            <span class="text-red-600 text-sm">
+                                                <i class="bi bi-calendar"></i> <?php echo date('M j, Y', strtotime($diagnosis['doctor_diagnosis_date'])); ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <p class="text-gray-800"><?php echo nl2br(htmlspecialchars($diagnosis['doctor_note'])); ?></p>
+                                </div>
+                            <?php endif; ?>
                             
                             <?php if ($diagnosis['chief_complaint']): ?>
                                 <div>
@@ -464,7 +596,7 @@ function generateDefaultAvatar($username) {
                             <?php if ($diagnosis['assessment']): ?>
                                 <div>
                                     <span class="font-semibold text-gray-700">Assessment/Diagnosis:</span>
-                                    <p class="text-gray-900 mt-1 bg-white p-3 rounded border-l-4 border-orange-500 font-medium">
+                                    <p class="text-gray-900 mt-1 bg-white p-3 rounded border-l-4 border-maroon font-medium">
                                         <?php echo nl2br(htmlspecialchars($diagnosis['assessment'])); ?>
                                     </p>
                                 </div>
@@ -532,84 +664,48 @@ function generateDefaultAvatar($username) {
                     <h3 class="text-xl font-semibold text-gray-700 mb-2">No Diagnoses Found</h3>
                     <p class="text-gray-500 mb-4">
                         <?php if ($filter_type !== 'all'): ?>
-                            No <?php echo ucfirst($filter_type); ?> diagnoses found for your account.
+                            No diagnoses found for <?php echo 
+                                $filter_type === 'history_form' ? 'Medical History Forms' : 
+                                ($filter_type === 'medical_exam' ? 'Medical Examination Forms' : 
+                                'Dental Examination Forms'); ?>.
                         <?php else: ?>
-                            You don't have any diagnoses yet. Diagnoses from doctors, dentists, or nurses will appear here after your clinic visit.
+                            You don't have any diagnoses yet. Diagnoses will appear here after your clinic visits.
                         <?php endif; ?>
                     </p>
                     <?php if ($filter_type !== 'all'): ?>
-                        <a href="?filter=all" class="red-orange-gradient-button text-white px-4 py-2 rounded-lg font-medium inline-block">
+                        <a href="?filter=all" class="maroon-gradient-button text-white px-4 py-2 rounded-lg font-medium inline-block">
                             View All Diagnoses
                         </a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
-    </main>
 
-    <footer class="red-orange-gradient text-white py-4 mt-8">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
+        <!-- Simple Footer -->
+        <div class="mt-8 pt-6 border-t border-gray-200 text-center">
+            <p class="text-gray-600 text-sm">
+                <small>&copy; <?php echo date('Y'); ?> Batangas State University - Clinic Record Management System</small>
+            </p>
         </div>
-    </footer>
+    </div>
 
     <script>
-// Add confirmation for logout
-document.addEventListener('DOMContentLoaded', function() {
-    const logoutLinks = document.querySelectorAll('a[href="logout.php"]');
-    
-    logoutLinks.forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Create custom confirmation modal
-            const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-            modal.innerHTML = `
-                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
-                    <div class="p-6 text-center">
-                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="bi bi-question-circle text-red-600 text-2xl"></i>
-                        </div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-2">Confirm Logout</h3>
-                        <p class="text-gray-600 mb-6">Are you sure you want to log out of your account?</p>
-                        
-                        <div class="flex gap-3 justify-center">
-                            <button type="button" id="cancelLogout" 
-                                class="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors">
-                                Cancel
-                            </button>
-                            <button type="button" id="confirmLogout" 
-                                class="red-orange-gradient-button text-white px-5 py-2.5 rounded-lg font-medium hover:shadow-lg transition-all">
-                                Yes, Logout
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-            
-            // Handle cancel button
-            document.getElementById('cancelLogout').addEventListener('click', function() {
-                document.body.removeChild(modal);
-            });
-            
-            // Handle confirm button
-            document.getElementById('confirmLogout').addEventListener('click', function() {
-                window.location.href = 'logout.php';
-            });
-            
-            // Close modal when clicking outside
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    document.body.removeChild(modal);
-                }
-            });
-        });
-    });
-});
-</script>
+    // Update time every second
+    function updateTime() {
+        const now = new Date();
+        const options = {
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: true
+        };
+        const timeString = now.toLocaleTimeString('en-PH', options);
+        document.getElementById('currentTime').textContent = timeString;
+    }
+
+    // Initialize
+    updateTime();
+    setInterval(updateTime, 1000);
+    </script>
 </body>
 </html>
-

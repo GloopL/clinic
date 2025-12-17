@@ -126,8 +126,8 @@ $templateId = $pdf->importPage(1);
 $pdf->AddPage();
 $pdf->useTemplate($templateId, 0, 0, null, null, true);
 
-// Set font (Arial is commonly available in PDF readers)
-$pdf->SetFont('Arial', '', 10);
+// Set font to Times New Roman (changed from Arial)
+$pdf->SetFont('Times', '', 10);
 
 // Define coordinates for each field based on your template
 $field_coordinates = [];
@@ -331,7 +331,7 @@ function drawCheckbox($pdf, $x, $y, $checked) {
         $pdf->SetFont('ZapfDingbats', '', 10);
         $pdf->SetXY($x, $y);
         $pdf->Cell(4, 4, '4', 0, 0, 'C'); // Checkmark character
-        $pdf->SetFont('Arial', '', 10);
+        $pdf->SetFont('Times', '', 10); // Changed from Arial to Times
     }
 }
 
@@ -340,7 +340,7 @@ function drawX($pdf, $x, $y) {
     $pdf->SetFont('ZapfDingbats', '', 10);
     $pdf->SetXY($x, $y);
     $pdf->Cell(4, 4, '8', 0, 0, 'C'); // X mark character
-    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetFont('Times', '', 10); // Changed from Arial to Times
 }
 
 // Fill the PDF fields - SINGLE PAGE ONLY

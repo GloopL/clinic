@@ -55,47 +55,25 @@ $type = $_GET['type'] ?? '';
 $id = $_GET['id'] ?? '';
 $record = null;
 $is_certified = false;
+$medical_diagnoses = [];
+$existing_diagnosis = null;
 
-// ✅ NEW: Determine where the user came from for back button
-$referrer = $_SERVER['HTTP_REFERER'] ?? '';
-$back_url = "../records/submissions.php"; // Default to submissions
+// ✅ FIXED BACK BUTTON LOGIC: Simplified
+$back_url = "../records/submissions.php"; // Default
 
-// Check if user came from verify_submission.php
-if (strpos($referrer, 'verify_submission.php') !== false) {
-    // User came from verify_submission.php - preserve the type and id
-    $parsed_url = parse_url($referrer);
-    if (isset($parsed_url['query'])) {
-        parse_str($parsed_url['query'], $query_params);
-        $back_type = $query_params['type'] ?? '';
-        $back_id = $query_params['id'] ?? '';
-        if ($back_id) {
-            $back_url = "../records/verify_submission.php?type=" . urlencode($back_type) . "&id=" . urlencode($back_id);
-        } else {
-            $back_url = "../records/verify_submission.php" . ($back_type ? "?type=" . urlencode($back_type) : "");
-        }
-    }
-}
-
-// Also check if there's a 'from' parameter in the URL (for direct links)
+// Check if there's a 'from' parameter in the URL (highest priority)
 if (isset($_GET['from'])) {
     $from = $_GET['from'];
     if ($from === 'submissions') {
-        $back_type = $_GET['back_type'] ?? $type;
-        $back_url = "../records/submissions.php" . ($back_type ? "?type=" . urlencode($back_type) : "");
+        $back_url = "../records/submissions.php" . ($type ? "?type=" . urlencode($type) : "");
     } elseif ($from === 'verify') {
-        $back_type = $_GET['back_type'] ?? $type;
-        $back_id = $_GET['back_id'] ?? $id;
-        if ($back_id) {
-            $back_url = "../records/verify_submission.php?type=" . urlencode($back_type) . "&id=" . urlencode($back_id);
-        } else {
-            $back_url = "../records/verify_submission.php" . ($back_type ? "?type=" . urlencode($back_type) : "");
-        }
+        $back_url = "../records/verify_submission.php" . ($type ? "?type=" . urlencode($type) . "&id=" . urlencode($id) : "");
+    } elseif ($from === 'view_patient') {
+        $back_url = "../records/view_patient.php";
     }
-}
-
-// If there's a type parameter, add it to the submissions URL
-if ($type) {
-    $back_url = "../records/submissions.php?type=" . urlencode($type);
+} else {
+    // Simple default based on user role
+    $back_url = "../records/submissions.php" . ($type ? "?type=" . urlencode($type) : "");
 }
 
 // Map form types to their respective tables.
@@ -133,6 +111,25 @@ $dental_checkbox_map = [
         'is_muscle_spasm' => 'Muscle Spasm'
     ]
 ];
+
+// Add provider_id column to medical_diagnoses table if it doesn't exist
+$check_column_query = "SHOW COLUMNS FROM medical_diagnoses LIKE 'provider_id'";
+$result = $conn->query($check_column_query);
+if ($result->num_rows == 0) {
+    $add_column_query = "ALTER TABLE medical_diagnoses ADD COLUMN provider_id INT AFTER provider_name";
+    $conn->query($add_column_query);
+}
+
+// Add separate nurse_note, doctor_note columns if they don't exist
+$check_note_columns = $conn->query("SHOW COLUMNS FROM medical_diagnoses LIKE 'nurse_note'");
+if ($check_note_columns->num_rows == 0) {
+    $add_note_columns = "ALTER TABLE medical_diagnoses 
+                        ADD COLUMN nurse_note TEXT AFTER assessment,
+                        ADD COLUMN doctor_note TEXT AFTER nurse_note,
+                        ADD COLUMN nurse_diagnosis_date DATE AFTER doctor_note,
+                        ADD COLUMN doctor_diagnosis_date DATE AFTER nurse_diagnosis_date";
+    $conn->query($add_note_columns);
+}
 
 // Helper function to get provider's full name
 function getProviderFullName($conn, $provider_username) {
@@ -201,44 +198,6 @@ if ($patient_id !== null) {
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $recent_consultations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    }
-}
-
-// Fetch recent diagnoses for display - FILTERED BY CURRENT USER'S ROLE
-$recent_diagnoses = [];
-if ($patient_id !== null) {
-    // Determine which diagnosis types to show based on current user role
-    $allowed_diagnosis_types = [];
-    
-    if ($user_role === 'nurse') {
-        $allowed_diagnosis_types = ['nurse'];
-    } elseif ($user_role === 'dentist') {
-        $allowed_diagnosis_types = ['dentist'];
-    } elseif ($user_role === 'doctor' || $user_role === 'physician') {
-        $allowed_diagnosis_types = ['doctor'];
-    } elseif ($user_role === 'admin' || $user_role === 'staff') {
-        // Admin/staff can see all diagnosis types
-        $allowed_diagnosis_types = ['nurse', 'dentist', 'doctor'];
-    }
-    
-    if (!empty($allowed_diagnosis_types)) {
-        $placeholders = str_repeat('?,', count($allowed_diagnosis_types) - 1) . '?';
-        $stmt = $conn->prepare("
-            SELECT md.diagnosis_type, md.diagnosis_date, md.provider_name, md.chief_complaint, 
-                   md.assessment, md.severity, md.status,
-                   COALESCE(u.full_name, md.provider_name) as provider_full_name
-            FROM medical_diagnoses md 
-            LEFT JOIN users u ON BINARY u.username = md.provider_name
-            WHERE md.patient_id = ? AND md.diagnosis_type IN ($placeholders)
-            ORDER BY md.diagnosis_date DESC 
-            LIMIT 3
-        ");
-        
-        $types = "i" . str_repeat('s', count($allowed_diagnosis_types));
-        $params = array_merge([$patient_id], $allowed_diagnosis_types);
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $recent_diagnoses = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 }
 
@@ -318,31 +277,59 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_record']) && $
         'needs_treatment_others_text',
         
         // Physician certification date
-        'physician_date'
+        'physician_date',
+        
+        // DIAGNOSIS NOTE FIELDS - SIMPLIFIED TO JUST NOTES
+        'diagnosis_note'
     ];
 } elseif ($effective_type === 'dental_form' || $effective_type === 'dental_exam') {
     $possible_fields = [
         'remarks', 'dental_chart_data', 'dentist_name', 'license_no', 'dentist_date',
-        'dentition_status', 'treatment_needs', 'periodontal_screening', 'occlusion', 'appliances', 'tmd_status'
+        // Dental checkbox fields - ADDED THESE - FIXED: Now includes all checkbox fields
+        'is_gingivitis', 'is_early_periodontitis', 'is_moderate_periodontitis', 'is_advanced_periodontitis',
+        'is_class_molar', 'is_overjet', 'is_overbite', 'is_crossbite', 'is_midline_deviation',
+        'is_orthodontic', 'is_stayplate', 'is_appliance_others',
+        'is_clenching', 'is_clicking', 'is_trismus', 'is_muscle_spasm',
+        // Also include the JSON columns for backward compatibility
+        'periodontal_screening', 'occlusion', 'appliances', 'tmd_status'
     ];
 } elseif ($effective_type === 'history_form') {
     $possible_fields = [
-        'denied_participation', 'asthma', 'seizure_disorder', 'heart_problem', 'diabetes', 
+        'denied_participation', 'ashtma', 'seizure_disorder', 'heart_problem', 'diabetes', 
         'high_blood_pressure', 'surgery_history', 'chest_pain', 'injury_history', 'xray_history', 
         'head_injury', 'muscle_cramps', 'vision_problems', 'special_diet', 'menstrual_history',
         'first_menstrual_age', 'sports_event', 
         'height_normal', 'height_findings', 'weight_normal', 'weight_findings', 'bp_normal', 'bp_findings',
         'pulse_normal', 'pulse_findings', 'vision_normal', 'vision_findings', 'appearance_normal', 'appearance_findings',
-        'eent_normal', 'eent_findings', 'pupils_normal', 'pupils_findings', 'hearing_normal', 'hearing_findings',
+        'eent_normal', 'eent_findings', 'pupils_normal', 'pupils_findings', 'hearning_normal', 'hearing_findings',
         'chest_normal', 'chest_findings', 'heart_normal', 'heart_findings', 'abdomen_normal', 'abdomen_findings',
         'genitourinary_normal', 'genitourinary_findings', 'neurologic_normal', 'neurologic_findings',
         'neck_normal', 'neck_findings', 'back_normal', 'back_findings', 'shoulder_arm_normal', 'shoulder_arm_findings',
         'elbow_forearm_normal', 'elbow_forearm_findings', 'wrist_hand_normal', 'wrist_hand_findings',
-        'knee_normal', 'knee_findings', 'leg_ankle_normal', 'leg_ankle_findings', 'foot_toes_normal', 'foot_toes_findings'
+        'knee_normal', 'knee_findings', 'leg_ankle_normal', 'leg_ankle_findings', 'foot_toes_normal', 'foot_toes_findings',
+        
+        // DIAGNOSIS NOTE FIELDS - SIMPLIFIED TO JUST NOTES
+        'diagnosis_note'
     ];
 }
         
+        // FIX: Process dental checkbox fields BEFORE building payload - FIXED: Handle checkbox processing
         if ($effective_type === 'dental_form' || $effective_type === 'dental_exam') {
+            // First, ensure all checkbox fields have values
+            $dental_checkbox_fields = [
+                'is_gingivitis', 'is_early_periodontitis', 'is_moderate_periodontitis', 'is_advanced_periodontitis',
+                'is_class_molar', 'is_overjet', 'is_overbite', 'is_crossbite', 'is_midline_deviation',
+                'is_orthodontic', 'is_stayplate', 'is_appliance_others',
+                'is_clenching', 'is_clicking', 'is_trismus', 'is_muscle_spasm'
+            ];
+            
+            foreach ($dental_checkbox_fields as $field) {
+                if (!isset($_POST[$field])) {
+                    $_POST[$field] = 0; // Set to 0 if not submitted
+                }
+            }
+            
+            // Then build the JSON payload for database storage (for backward compatibility)
             foreach ($dental_checkbox_map as $column => $fieldMap) {
                 $_POST[$column] = buildDentalCheckboxPayload($fieldMap, $_POST);
             }
@@ -354,10 +341,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_record']) && $
                 
                 // Handle checkbox/boolean fields
                 if (str_contains($field, 'is_') || str_contains($field, '_normal') || 
-                    $field === 'denied_participation' || $field === 'asthma' || $field === 'seizure_disorder' ||
+                    $field === 'denied_participation' || $field === 'ashtma' || $field === 'seizure_disorder' ||
                     $field === 'heart_problem' || $field === 'diabetes' || $field === 'high_blood_pressure' ||
                     $field === 'chest_pain' || $field === 'head_injury' || $field === 'muscle_cramps' || 
-                    $field === 'vision_problems') {
+                    $field === 'vision_problems' || $field === 'needs_follow_up') {
                     
                     $value = isset($_POST[$field]) && $_POST[$field] == '1' ? 1 : 0;
                     $set_parts[] = "$field = ?";
@@ -365,7 +352,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_record']) && $
                     $types .= 'i';
                 } 
                 // Handle date fields
-                elseif ($field === 'examination_date' || $field === 'dentist_date') {
+                elseif ($field === 'examination_date' || $field === 'dentist_date' || $field === 'physician_date' || $field === 'student_signature_date') {
                     $value = $_POST[$field] ?? '';
                     $set_parts[] = "$field = ?";
                     $params[] = $value;
@@ -387,7 +374,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_record']) && $
         $medical_types = '';
         
         $common_fields_to_update = ['physician_name', 'verification_status', 'verification_notes'];
-        
+
         foreach ($common_fields_to_update as $field) {
             if (isset($_POST[$field])) {
                 $medical_set_parts[] = "$field = ?";
@@ -434,6 +421,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_record']) && $
         
         if ($all_updates_successful) {
             $success_message = "Record successfully updated.";
+            
+            // Handle save and print request
+            if (isset($_POST['print_after_save'])) {
+                header("Location: generate_certified_pdf.php?type=" . urlencode($type) . "&id=" . urlencode($id));
+                exit();
+            }
+            
+            // Handle save and certify request - FIXED: Change status to 'certified' and set certified_by and certified_date
+            if (isset($_POST['certify_after_save'])) {
+                // Get current user's username for certified_by
+                $certified_by = $_SESSION['username'] ?? 'Unknown';
+                
+                // Update the medical_records table to mark as certified
+                $stmt = $conn->prepare("UPDATE medical_records SET verification_status = 'certified', certified_by = ?, certified_date = NOW() WHERE id = ?");
+                $stmt->bind_param("si", $certified_by, $record_id);
+                
+                if ($stmt->execute()) {
+                    $success_message = "Record successfully updated and certified!";
+                    header("Location: view_record.php?type=" . urlencode($type) . "&id=" . urlencode($id) . "&success=" . urlencode($success_message));
+                    exit();
+                } else {
+                    $error_message = "Error certifying record: " . $conn->error;
+                }
+                $stmt->close();
+            }
+            
+            // Handle mark for certification
+            if (isset($_POST['mark_for_certification'])) {
+                // Update the medical_records table to mark as for certification
+                $stmt = $conn->prepare("UPDATE medical_records SET verification_status = 'for_certification' WHERE id = ?");
+                $stmt->bind_param("i", $record_id);
+                
+                if ($stmt->execute()) {
+                    $success_message = "Record successfully updated and submitted for certification!";
+                    header("Location: view_record.php?type=" . urlencode($type) . "&id=" . urlencode($id) . "&success=" . urlencode($success_message));
+                    exit();
+                }
+                $stmt->close();
+            }
+            
             // Refresh the record data
             header("Location: view_record.php?type=" . urlencode($type) . "&id=" . urlencode($id) . "&success=" . urlencode($success_message));
             exit();
@@ -522,7 +549,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['mark_for_certificatio
     $stmt->close();
 }
 
-// Handle Mark as Completed Request for Dental Forms
+// Handle Mark as Completed Request for Dental Forms - FIXED: Now updates the dental exam record too
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['mark_as_completed'], $_POST['record_id'], $_POST['record_type'])) {
     $record_id = $_POST['record_id'];
     $record_type = $_POST['record_type'];
@@ -531,18 +558,93 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['mark_as_completed'], 
     if (in_array($user_role, ['dentist', 'admin', 'staff']) && 
         ($record_type === 'dental_form' || $record_type === 'dental_exam')) {
         
-        // Update the medical_records table to mark as completed
-        $stmt = $conn->prepare("UPDATE medical_records SET verification_status = 'completed' WHERE id = ?");
-        $stmt->bind_param("i", $record_id);
+        // Begin transaction
+        $conn->begin_transaction();
         
-        if ($stmt->execute()) {
+        try {
+            // Update the medical_records table to mark as completed
+            $stmt = $conn->prepare("UPDATE medical_records SET verification_status = 'completed' WHERE id = ?");
+            $stmt->bind_param("i", $record_id);
+            
+            if (!$stmt->execute()) {
+                throw new Exception("Error updating medical record status: " . $conn->error);
+            }
+            $stmt->close();
+            
+            // Also update the dental_exams table with dentist info and date
+            $current_user_id = $_SESSION['user_id'] ?? 0;
+            $dentist_name = '';
+            $license_no = '';
+            
+            // Get current user's information
+            if ($current_user_id) {
+                $user_query = $conn->prepare("SELECT full_name, username FROM users WHERE id = ?");
+                $user_query->bind_param("i", $current_user_id);
+                $user_query->execute();
+                $user_result = $user_query->get_result();
+                
+                if ($user_result->num_rows > 0) {
+                    $user_data = $user_result->fetch_assoc();
+                    // Use full_name if available, otherwise use username
+                    if (!empty($user_data['full_name']) && trim($user_data['full_name']) !== '') {
+                        $dentist_name = trim($user_data['full_name']);
+                    } else {
+                        $dentist_name = $user_data['username'];
+                    }
+                }
+                $user_query->close();
+            }
+            
+            // If no user found, fallback to session username
+            if (empty($dentist_name) && isset($_SESSION['username'])) {
+                $dentist_name = $_SESSION['username'];
+            }
+            
+            // Final fallback
+            if (empty($dentist_name)) {
+                $dentist_name = 'Dentist';
+            }
+            
+            // Add D.M.D. title for dentists
+            if ($user_role === 'dentist') {
+                $dentist_name .= ' D.M.D.';
+            }
+            
+            $current_date = date('Y-m-d');
+            
+            // Check if dentist_name column exists, if not add it
+            $check_dentist_name = $conn->query("SHOW COLUMNS FROM dental_exams LIKE 'dentist_name'");
+            if ($check_dentist_name->num_rows == 0) {
+                $conn->query("ALTER TABLE dental_exams ADD COLUMN dentist_name VARCHAR(255) AFTER remarks");
+            }
+            
+            // Check if dentist_date column exists, if not add it
+            $check_dentist_date = $conn->query("SHOW COLUMNS FROM dental_exams LIKE 'dentist_date'");
+            if ($check_dentist_date->num_rows == 0) {
+                $conn->query("ALTER TABLE dental_exams ADD COLUMN dentist_date DATE AFTER dentist_name");
+            }
+            
+            // Update dental_exams table
+            $update_dental = $conn->prepare("UPDATE dental_exams SET dentist_name = ?, dentist_date = ? WHERE record_id = ?");
+            $update_dental->bind_param("ssi", $dentist_name, $current_date, $record_id);
+            
+            if (!$update_dental->execute()) {
+                throw new Exception("Error updating dental exam details: " . $conn->error);
+            }
+            $update_dental->close();
+            
+            // Commit transaction
+            $conn->commit();
+            
             $success_message = "Dental form successfully marked as completed!";
             header("Location: view_record.php?type=" . urlencode($type) . "&id=" . urlencode($id) . "&success=" . urlencode($success_message));
             exit();
-        } else {
-            $error_message = "Error marking form as completed: " . $conn->error;
+            
+        } catch (Exception $e) {
+            // Rollback transaction on error
+            $conn->rollback();
+            $error_message = "Error marking form as completed: " . $e->getMessage();
         }
-        $stmt->close();
     } else {
         $error_message = "You don't have permission to mark this form as completed.";
     }
@@ -580,14 +682,31 @@ if ($type && $id) {
             $record = $result->fetch_assoc();
 
             if (!$record) {
-    $error_message = "No record found for this submission.";
-} else {
-    // ✅ ADD THIS: Check if record is already marked for certification
-    $is_certified = false;
-    if (isset($record['verification_status'])) {
-        $is_certified = ($record['verification_status'] === 'for_certification' || $record['verification_status'] === 'certified');
-    }
-}
+                $error_message = "No record found for this submission.";
+            } else {
+                // ✅ ADD THIS: Check if record is already marked for certification
+                $is_certified = false;
+                if (isset($record['verification_status'])) {
+                    $is_certified = ($record['verification_status'] === 'for_certification' || $record['verification_status'] === 'certified');
+                }
+                
+                // ✅ FIXED: Fetch medical diagnoses AFTER record is loaded
+                $stmt_diagnoses = $conn->prepare("
+                    SELECT md.*, u.full_name as provider_full_name, u.role as provider_role
+                    FROM medical_diagnoses md
+                    LEFT JOIN users u ON BINARY u.username = md.provider_name
+                    WHERE md.patient_id = ? AND md.record_id = ?
+                    ORDER BY md.diagnosis_date DESC, md.created_at DESC
+                ");
+                $stmt_diagnoses->bind_param("ii", $record['patient_id'], $record['record_id']);
+                $stmt_diagnoses->execute();
+                $medical_diagnoses = $stmt_diagnoses->get_result()->fetch_all(MYSQLI_ASSOC);
+                
+                // Get existing diagnosis if any
+                if (!empty($medical_diagnoses)) {
+                    $existing_diagnosis = $medical_diagnoses[0];
+                }
+            }
             $stmt->close();
         } else {
             $error_message = "Error preparing query: " . $conn->error;
@@ -597,9 +716,24 @@ if ($type && $id) {
     }
 }
 
+// FIX: Load dental checkbox data correctly
 if ($record && ($type === 'dental_form' || $type === 'dental_exam')) {
+    // First, try to hydrate from individual checkbox fields
+    $has_individual_fields = false;
     foreach ($dental_checkbox_map as $column => $fieldMap) {
-        hydrateDentalCheckboxFlags($record, $column, $fieldMap);
+        foreach ($fieldMap as $field => $label) {
+            if (isset($record[$field])) {
+                $has_individual_fields = true;
+                break 2;
+            }
+        }
+    }
+    
+    if (!$has_individual_fields) {
+        // If individual fields don't exist, hydrate from JSON columns
+        foreach ($dental_checkbox_map as $column => $fieldMap) {
+            hydrateDentalCheckboxFlags($record, $column, $fieldMap);
+        }
     }
 }
 
@@ -619,41 +753,160 @@ if ($record && isset($record['patient_id'])) {
     $recent_consultations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
-// Fetch recent diagnoses for the patient - FILTERED BY CURRENT USER ROLE
-if ($record && isset($record['patient_id'])) {
-    // Determine which diagnosis types to show based on current user role
-    $allowed_diagnosis_types = [];
+// Handle Medical Diagnosis Submission - MODIFIED: Now with separate notes
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['add_medical_diagnosis'])) {
+    $record_id = $_POST['record_id'];
+    $patient_id = $_POST['patient_id'];
+    $diagnosis_type = $_POST['diagnosis_type'];
+    $user_id = $_SESSION['user_id'];
     
-    if ($user_role === 'nurse') {
-        $allowed_diagnosis_types = ['nurse'];
-    } elseif ($user_role === 'dentist') {
-        $allowed_diagnosis_types = ['dentist'];
-    } elseif ($user_role === 'doctor' || $user_role === 'physician') {
-        $allowed_diagnosis_types = ['doctor'];
-    } elseif ($user_role === 'admin' || $user_role === 'staff') {
-        // Admin/staff can see all diagnosis types
-        $allowed_diagnosis_types = ['nurse', 'dentist', 'doctor'];
-    }
+    // Get user's full name and role
+    $user_query = $conn->prepare("SELECT full_name, username, role FROM users WHERE id = ?");
+    $user_query->bind_param("i", $user_id);
+    $user_query->execute();
+    $user_result = $user_query->get_result();
+    $user_data = $user_result->fetch_assoc();
     
-    if (!empty($allowed_diagnosis_types)) {
-        $placeholders = str_repeat('?,', count($allowed_diagnosis_types) - 1) . '?';
-        $stmt = $conn->prepare("
-            SELECT md.diagnosis_type, md.diagnosis_date, md.provider_name, md.chief_complaint, 
-                   md.assessment, md.severity, md.status,
-                   COALESCE(u.full_name, md.provider_name) as provider_full_name
-            FROM medical_diagnoses md 
-            LEFT JOIN users u ON BINARY u.username = md.provider_name
-            WHERE md.patient_id = ? AND md.diagnosis_type IN ($placeholders)
-            ORDER BY md.diagnosis_date DESC 
-            LIMIT 3
-        ");
+    $provider_name = !empty($user_data['full_name']) ? $user_data['full_name'] : $user_data['username'];
+    $provider_role = $user_data['role'];
+    
+    // Check if a diagnosis already exists for this patient and record
+    $check_stmt = $conn->prepare("SELECT id FROM medical_diagnoses WHERE patient_id = ? AND record_id = ?");
+    $check_stmt->bind_param("ii", $patient_id, $record_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        // Update existing diagnosis
+        $existing_diagnosis = $check_result->fetch_assoc();
+        $diagnosis_id = $existing_diagnosis['id'];
         
-        $types = "i" . str_repeat('s', count($allowed_diagnosis_types));
-        $params = array_merge([$record['patient_id']], $allowed_diagnosis_types);
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $recent_diagnoses = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        if ($diagnosis_type === 'nurse') {
+            // Update nurse note and date
+            $nurse_note = $_POST['nurse_note'] ?? '';
+            $stmt = $conn->prepare("
+                UPDATE medical_diagnoses 
+                SET nurse_note = ?, 
+                    nurse_diagnosis_date = CURDATE(),
+                    diagnosis_date = CURDATE(),
+                    provider_name = ?,
+                    provider_role = ?,
+                    provider_id = ?
+                WHERE id = ?
+            ");
+            $stmt->bind_param("sssii", 
+                $nurse_note,
+                $provider_name, 
+                $provider_role, 
+                $user_id,
+                $diagnosis_id);
+        } elseif ($diagnosis_type === 'doctor') {
+            // Update doctor note and date
+            $doctor_note = $_POST['doctor_note'] ?? '';
+            $stmt = $conn->prepare("
+                UPDATE medical_diagnoses 
+                SET doctor_note = ?, 
+                    doctor_diagnosis_date = CURDATE(),
+                    diagnosis_date = CURDATE(),
+                    provider_name = ?,
+                    provider_role = ?,
+                    provider_id = ?
+                WHERE id = ?
+            ");
+            $stmt->bind_param("sssii", 
+                $doctor_note,
+                $provider_name, 
+                $provider_role, 
+                $user_id,
+                $diagnosis_id);
+        }
+    } else {
+        // Insert new diagnosis
+        if ($diagnosis_type === 'nurse') {
+            $nurse_note = $_POST['nurse_note'] ?? '';
+            $stmt = $conn->prepare("
+                INSERT INTO medical_diagnoses 
+                (patient_id, record_id, diagnosis_type, diagnosis_date, 
+                 provider_name, provider_role, provider_id,
+                 nurse_note, nurse_diagnosis_date) 
+                VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, CURDATE())
+            ");
+            $stmt->bind_param("iisssss", 
+                $patient_id, $record_id, $diagnosis_type, 
+                $provider_name, $provider_role, $user_id,
+                $nurse_note);
+        } elseif ($diagnosis_type === 'doctor') {
+            $doctor_note = $_POST['doctor_note'] ?? '';
+            $stmt = $conn->prepare("
+                INSERT INTO medical_diagnoses 
+                (patient_id, record_id, diagnosis_type, diagnosis_date, 
+                 provider_name, provider_role, provider_id,
+                 doctor_note, doctor_diagnosis_date) 
+                VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, CURDATE())
+            ");
+            $stmt->bind_param("iisssss", 
+                $patient_id, $record_id, $diagnosis_type, 
+                $provider_name, $provider_role, $user_id,
+                $doctor_note);
+        }
     }
+    
+    if ($stmt->execute()) {
+        $success_message = ucfirst($diagnosis_type) . " notes added successfully!";
+        header("Location: view_record.php?type=" . urlencode($type) . "&id=" . urlencode($id) . "&success=" . urlencode($success_message));
+        exit();
+    } else {
+        $error_message = "Error adding notes: " . $conn->error;
+    }
+    $stmt->close();
+}
+
+// Handle Medical Diagnosis Deletion
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['delete_medical_diagnosis'])) {
+    $diagnosis_id = $_POST['diagnosis_id'];
+    
+    // Check if diagnosis exists and get provider info
+    $check_query = $conn->prepare("SELECT provider_id FROM medical_diagnoses WHERE id = ?");
+    $check_query->bind_param("i", $diagnosis_id);
+    $check_query->execute();
+    $check_result = $check_query->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        $diagnosis_data = $check_result->fetch_assoc();
+        
+        // Allow deletion if user is the original provider or an admin
+        if ($diagnosis_data['provider_id'] == $_SESSION['user_id'] || $user_role === 'admin') {
+            $delete_stmt = $conn->prepare("DELETE FROM medical_diagnoses WHERE id = ?");
+            $delete_stmt->bind_param("i", $diagnosis_id);
+            
+            if ($delete_stmt->execute()) {
+                $success_message = "Notes deleted successfully!";
+                header("Location: view_record.php?type=" . urlencode($type) . "&id=" . urlencode($id) . "&success=" . urlencode($success_message));
+                exit();
+            } else {
+                $error_message = "Error deleting notes: " . $conn->error;
+            }
+            $delete_stmt->close();
+        } else {
+            $error_message = "You are not authorized to delete these notes.";
+        }
+    }
+    $check_query->close();
+}
+
+// Fetch recent diagnoses for the patient - MODIFIED: Get all diagnoses
+if ($record && isset($record['patient_id'])) {
+    $stmt = $conn->prepare("
+        SELECT md.*, u.full_name as provider_full_name, u.role as provider_role
+        FROM medical_diagnoses md 
+        LEFT JOIN users u ON BINARY u.username = md.provider_name
+        WHERE md.patient_id = ?
+        ORDER BY md.diagnosis_date DESC 
+        LIMIT 3
+    ");
+    $stmt->bind_param("i", $record['patient_id']);
+    $stmt->execute();
+    $recent_diagnoses = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 // Helper function for rendering editable fields
@@ -675,6 +928,11 @@ function render_editable_field($record, $field, $is_editable, $is_checkbox = fal
 
     if ($input_type === 'date') {
         return '<input type="date" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-maroon px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
+    }
+
+    // For text fields, ensure proper input type
+    if ($input_type === 'number') {
+        return '<input type="number" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-maroon px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
     }
 
     return '<input type="' . $input_type . '" name="' . $field . '" value="' . $value . '" class="w-full rounded border border-maroon px-3 py-2 text-sm ' . $editable_class . '" ' . $readonly_attr . ' ' . $disabled_attr . '>';
@@ -854,6 +1112,14 @@ function generateInteractiveDentalChart($chartData) {
             font-weight: bold;
             min-height: 0.75rem;
         }
+        
+        /* FIX: Ensure colors show properly */
+        .bg-green-500 { background-color: #10b981 !important; }
+        .bg-red-500 { background-color: #ef4444 !important; }
+        .bg-blue-500 { background-color: #3b82f6 !important; }
+        .bg-yellow-500 { background-color: #eab308 !important; }
+        .bg-purple-500 { background-color: #8b5cf6 !important; }
+        .bg-white { background-color: #ffffff !important; }
     </style>
 
     <div class="mb-6">
@@ -936,23 +1202,29 @@ function generateToothSection($start, $end, $jaw, $chartData) {
         $conditionText = $toothData['text'] ?? 'None';
         
         // Determine initial color based on condition
-        $initialColor = 'bg-white text-gray-800';
+        $initialColor = 'bg-white text-gray-800 border-2 border-gray-300';
+        $textColor = 'text-gray-800';
+        
         if ($condition !== 'none') {
             $colorMap = [
-                'healthy' => 'bg-green-500 text-white',
-                'caries' => 'bg-red-500 text-white',
-                'filling' => 'bg-blue-500 text-white',
-                'extraction' => 'bg-yellow-500 text-white',
-                'crown' => 'bg-purple-500 text-white'
+                'healthy' => ['bg' => 'bg-green-500', 'text' => 'text-white', 'border' => 'border-green-600'],
+                'caries' => ['bg' => 'bg-red-500', 'text' => 'text-white', 'border' => 'border-red-600'],
+                'filling' => ['bg' => 'bg-blue-500', 'text' => 'text-white', 'border' => 'border-blue-600'],
+                'extraction' => ['bg' => 'bg-yellow-500', 'text' => 'text-gray-800', 'border' => 'border-yellow-600'],
+                'crown' => ['bg' => 'bg-purple-500', 'text' => 'text-white', 'border' => 'border-purple-600']
             ];
-            $initialColor = $colorMap[$condition] ?? 'bg-white text-gray-800';
+            
+            if (isset($colorMap[$condition])) {
+                $colorInfo = $colorMap[$condition];
+                $initialColor = $colorInfo['bg'] . ' ' . $colorInfo['text'] . ' ' . $colorInfo['border'];
+            }
         }
         
         $html .= '
             <div class="tooth-container flex flex-col items-center" data-tooth="' . $i . '">
                 <div class="tooth-number text-xs font-semibold text-maroon mb-1">' . $i . '</div>
                 <div class="tooth ' . ($isUpper ? 'tooth-upper' : 'tooth-lower') . ' 
-                    w-8 h-12 border-2 border-gray-300 rounded-lg cursor-pointer transition-all duration-200 
+                    w-8 h-12 rounded-lg cursor-pointer transition-all duration-200 
                     hover:scale-110 hover:shadow-md ' . $initialColor . ' flex items-center justify-center"
                     data-tooth="' . $i . '"
                     onclick="toggleToothCondition(this)">
@@ -1330,6 +1602,16 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             background: #d1fae5;
         }
         
+        .diagnosis-note-section {
+            border-left: 4px solid #3b82f6;
+            background: #dbeafe;
+        }
+        
+        .medical-diagnoses-section {
+            border-left: 4px solid #3b82f6;
+            background: #dbeafe;
+        }
+        
         .diagnosis-badge-nurse { background-color: #3b82f6; }
         .diagnosis-badge-dentist { background-color: #10b981; }
         .diagnosis-badge-doctor { background-color: #ef4444; }
@@ -1357,18 +1639,34 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         .pulse-badge {
             animation: pulse-badge 2s infinite;
         }
+        
+        /* Add severity badge styles */
+        .severity-mild {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .severity-moderate {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        .severity-severe {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .severity-critical {
+            background-color: #f3e8ff;
+            color: #5b21b6;
+        }
     </style>
 </head>
 <body class="bg-maroon-light">
-
-   
 
 <div class="min-h-screen py-10 px-6">
     <div class="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-8">
         
         <div class="flex justify-between items-center mb-6 no-print">
             <div class="flex gap-2">
-                <!-- ✅ UPDATED BACK BUTTON - Dynamic based on where user came from -->
+                <!-- ✅ FIXED BACK BUTTON - Dynamic based on where user came from -->
                 <a href="<?= htmlspecialchars($back_url) ?>"
                    class="inline-flex items-center gap-2 maroon-gradient-button text-white font-semibold px-4 py-2 rounded-lg shadow transition-all">
                    <i class="bi bi-arrow-left-circle"></i> Back
@@ -1507,117 +1805,129 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
     </div> <!-- This closes the medical-section div -->
 
 <?php elseif ($type === 'dental_form' || $type === 'dental_exam'): ?>
-                        
-                    <?php elseif ($type === 'dental_form' || $type === 'dental_exam'): ?>
-                        <!-- Dental Exam Patient Info Layout -->
-                        <div class="space-y-4">
-                            <!-- First Row -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-24">Name:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))); ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-24">Program:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars($record['program']); ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-24">SR Code:</span>
-                                    <span class="text-gray-800"><?= !empty($record['student_number']) ? htmlspecialchars($record['student_number']) : 'N/A'; ?></span>
-                                </div>
-                            </div>
-                            
-                            <!-- Second Row -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-24">Sex:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-24">Age:</span>
-                                    <span class="text-gray-800">
-                                        <?php
-                                        if (!empty($record['date_of_birth'])) {
-                                            $birthDate = new DateTime($record['date_of_birth']);
-                                            $today = new DateTime();
-                                            $age = $today->diff($birthDate)->y;
-                                            echo $age . ' years old';
-                                        } else {
-                                            echo 'N/A';
-                                        }
-                                        ?>
-                                    </span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-24">Civil Status:</span>
-                                    <span class="text-gray-800"><?= !empty($record['civil_status']) ? htmlspecialchars(ucwords(strtolower($record['civil_status']))) : 'N/A'; ?></span>
-                                </div>
-                            </div>
-                            
-                            <!-- Third Row -->
-                            <div class="flex items-start">
-                                <span class="font-semibold text-maroon w-24">Address:</span>
-                                <span class="text-gray-800"><?= !empty($record['address']) ? htmlspecialchars($record['address']) : 'N/A'; ?></span>
-                            </div>
-                        </div>
-                        
-                    <?php else: ?>
-                        <!-- History Form Patient Info Layout (Current Layout) -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                            <!-- Left Side -->
-                            <div class="space-y-3">
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-32">Name:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))); ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-32">Year/Program:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars($record['year_level'] . ' / ' . $record['program']); ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-32">Date of Birth:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars($record['date_of_birth']); ?></span>
-                                </div>
-                            </div>
-                            
-                            <!-- Right Side -->
-                            <div class="space-y-3">
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-32">Date of Examination:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars($record['examination_date'] ?? 'N/A') ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-32">Sex:</span>
-                                    <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
-                                </div>
-                                <div class="flex items-start">
-                                    <span class="font-semibold text-maroon w-32">Age:</span>
-                                    <span class="text-gray-800">
-                                        <?php
-                                        if (!empty($record['date_of_birth'])) {
-                                            $birthDate = new DateTime($record['date_of_birth']);
-                                            $today = new DateTime();
-                                            $age = $today->diff($birthDate)->y;
-                                            echo $age . ' years old';
-                                        } else {
-                                            echo 'N/A';
-                                        }
-                                        ?>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Sports Event - Placed below all other fields -->
-<div class="pt-3 border-t border-maroon-200 mt-2">
-    <div class="flex items-start">
-        <span class="font-semibold text-maroon w-32">Sports Event:</span>
-        <span class="text-gray-800"><?= htmlspecialchars($record['sports_event'] ?? 'Not specified') ?></span>
-        <!-- Hidden input to preserve sports_event value during form submission -->
-        <input type="hidden" name="sports_event" value="<?= htmlspecialchars($record['sports_event'] ?? '') ?>">
+    <!-- FIXED: Added Patient Information Section for Dental Forms -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+        <!-- Left Side -->
+        <div class="space-y-3">
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Last Name:</span>
+                <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['last_name']))); ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">First Name:</span>
+                <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name']))); ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Middle Name:</span>
+                <span class="text-gray-800"><?= !empty($record['middle_name']) ? htmlspecialchars(ucwords(strtolower($record['middle_name']))) : 'N/A'; ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Sex:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
+            </div>
+        </div>
+        
+        <!-- Right Side -->
+        <div class="space-y-3">
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Date of Birth:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['date_of_birth']); ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Age:</span>
+                <span class="text-gray-800">
+                    <?php
+                    if (!empty($record['date_of_birth'])) {
+                        $birthDate = new DateTime($record['date_of_birth']);
+                        $today = new DateTime();
+                        $age = $today->diff($birthDate)->y;
+                        echo $age . ' years old';
+                    } else {
+                        echo 'N/A';
+                    }
+                    ?>
+                </span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Civil Status:</span>
+                <span class="text-gray-800"><?= !empty($record['civil_status']) ? htmlspecialchars(ucwords(strtolower($record['civil_status']))) : 'N/A'; ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Program:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['program']); ?></span>
+            </div>
+        </div>
     </div>
-</div>
-                    <?php endif; ?>
+    
+    <!-- Contact Information -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 pt-4 border-t border-maroon-200">
+        <div class="flex items-start">
+            <span class="font-semibold text-maroon w-32">Contact Number:</span>
+            <span class="text-gray-800"><?= !empty($record['contact_number']) ? htmlspecialchars($record['contact_number']) : 'N/A'; ?></span>
+        </div>
+        <div class="flex items-start">
+            <span class="font-semibold text-maroon w-32">Address:</span>
+            <span class="text-gray-800"><?= !empty($record['address']) ? htmlspecialchars($record['address']) : 'N/A'; ?></span>
+        </div>
+    </div>
+                        
+<?php else: ?>
+    <!-- History Form Patient Info Layout (Current Layout) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+        <!-- Left Side -->
+        <div class="space-y-3">
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Name:</span>
+                <span class="text-gray-800"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))); ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Year/Program:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['year_level'] . ' / ' . $record['program']); ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Date of Birth:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['date_of_birth']); ?></span>
+            </div>
+        </div>
+        
+        <!-- Right Side -->
+        <div class="space-y-3">
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Date of Examination:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['examination_date'] ?? 'N/A') ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Sex:</span>
+                <span class="text-gray-800"><?= htmlspecialchars($record['sex']); ?></span>
+            </div>
+            <div class="flex items-start">
+                <span class="font-semibold text-maroon w-32">Age:</span>
+                <span class="text-gray-800">
+                    <?php
+                    if (!empty($record['date_of_birth'])) {
+                        $birthDate = new DateTime($record['date_of_birth']);
+                        $today = new DateTime();
+                        $age = $today->diff($birthDate)->y;
+                        echo $age . ' years old';
+                    } else {
+                        echo 'N/A';
+                    }
+                    ?>
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sports Event - Placed below all other fields -->
+    <div class="pt-3 border-t border-maroon-200 mt-2">
+        <div class="flex items-start">
+            <span class="font-semibold text-maroon w-32">Sports Event:</span>
+            <span class="text-gray-800"><?= htmlspecialchars($record['sports_event'] ?? 'Not specified') ?></span>
+            <!-- Hidden input to preserve sports_event value during form submission -->
+            <input type="hidden" name="sports_event" value="<?= htmlspecialchars($record['sports_event'] ?? '') ?>">
+        </div>
+    </div>
+<?php endif; ?>
 
                 
                 <?php if ($type === 'medical_form' || $type === 'medical_exam'): ?>
@@ -1777,16 +2087,16 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- LEFT COLUMN -->
                 <div class="space-y-6">
-                    <!-- Blood Pressure -->
+                    <!-- Blood Pressure - FIXED: Should be text, not number -->
                     <div class="grid grid-cols-1 gap-1">
                         <label class="block font-medium mb-1 text-maroon">BLOOD PRESSURE</label>
-                        <?= render_editable_field($record, 'blood_pressure', $is_nurse) ?>
+                        <?= render_editable_field($record, 'blood_pressure', $is_nurse, false, 'text') ?>
                     </div>
                     
-                    <!-- Heart Rate -->
+                    <!-- Heart Rate - FIXED: Should be number -->
                     <div class="grid grid-cols-1 gap-1">
                         <label class="block font-medium mb-1 text-maroon">HEART RATE</label>
-                        <?= render_editable_field($record, 'heart_rate', $is_nurse) ?>
+                        <?= render_editable_field($record, 'heart_rate', $is_nurse, false, 'number') ?>
                     </div>
                     
                     <!-- Hearing -->
@@ -1839,11 +2149,11 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             <div class="space-y-3">
                                 <div>
                                     <label class="block text-sm mb-1 text-maroon">R:</label>
-                                    <?= render_editable_field($record, 'vision_right', $is_nurse) ?>
+                                    <?= render_editable_field($record, 'vision_right', $is_nurse, false, 'text') ?>
                                 </div>
                                 <div>
                                     <label class="block text-sm mb-1 text-maroon">L:</label>
-                                    <?= render_editable_field($record, 'vision_left', $is_nurse) ?>
+                                    <?= render_editable_field($record, 'vision_left', $is_nurse, false, 'text') ?>
                                 </div>
                             </div>
                         </div>
@@ -2073,194 +2383,422 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         </div>
     </div>
 
-
-        <!-- CERTIFICATION SECTION -->
-<div class="certification-section rounded-lg p-4 mb-6 border-2 border-green-500 bg-green-50">
-    <h3 class="font-semibold text-lg mb-4 text-green-800">CERTIFICATION</h3>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- LEFT COLUMN -->
-        <div class="space-y-4">
-            <!-- School/Company/Institution -->
-            <div>
-                <label class="block font-medium mb-1 text-green-700">School/Company/Institution:</label>
-                <input type="text" name="institution" value="BATANGAS STATE UNIVERSITY" 
-                       class="w-full rounded border border-green-300 px-3 py-2 text-sm bg-green-100" readonly>
-            </div>
-            
-            <!-- Name - Fetched from patient record -->
-            <div>
-                <label class="block font-medium mb-1 text-green-700">Name:</label>
-                <input type="text" name="certified_name" 
-                       value="<?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))) ?>" 
-                       class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
-                       <?= !$is_nurse ? 'readonly' : '' ?>>
-            </div>
-            
-            <!-- Weight (kg) -->
-            <div>
-                <label class="block font-medium mb-1 text-green-700">Weight (kg):</label>
-                <?= render_editable_field($record, 'certified_weight', $is_nurse) ?>
-            </div>
-            
-            <!-- Height (cm) -->
-            <div>
-                <label class="block font-medium mb-1 text-green-700">Height (cm):</label>
-                <?= render_editable_field($record, 'certified_height', $is_nurse) ?>
-            </div>
-            
-            <!-- Civil Status - Fetched from patient record -->
-            <div>
-                <label class="block font-medium mb-1 text-green-700">Civil Status:</label>
-                <input type="text" name="certified_civil_status" 
-                       value="<?= !empty($record['civil_status']) ? htmlspecialchars(ucwords(strtolower($record['civil_status']))) : '' ?>" 
-                       class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
-                       <?= !$is_nurse ? 'readonly' : '' ?>>
-            </div>
-            
-            <!-- Date of Examination - Fetched from medical exam -->
-            <div>
-                <label class="block font-medium mb-1 text-green-700">Date of Examination:</label>
-                <input type="text" name="certified_exam_date" 
-                       value="<?= !empty($record['examination_date']) ? htmlspecialchars($record['examination_date']) : '' ?>" 
-                       class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
-                       <?= !$is_nurse ? 'readonly' : '' ?>>
-            </div>
-            
-            <!-- Authorization Statement -->
-            <div class="mt-4">
-                <p class="text-sm text-green-800 font-medium mb-3">
-                    "I hereby authorize BATANGAS STATE UNIVERSITY and its officially designated medical examiner 
-                    and examining physician/s to furnish information that the company may need pertaining to my 
-                    health status and other pertinent medical findings and do hereby release them from any and 
-                    all legal responsibilities by so doing. I also further certify that the medical history 
-                    contained herein is true to the best of my knowledge and any false statement will disqualify 
-                    me from any employment benefits and claims."
-                </p>
-                
-                <!-- Signature and Date -->
-                <div class="mt-4">
-                    
-                    <div class="border-b-2 border-green-400 pt-4 pb-1 min-h-[40px] mb-2">
-                        <span class="text-sm text-gray-600"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))) ?></span>
-                    </div>
-                    <div>
-                        <label class="block font-medium mb-1 text-green-700">Date:</label>
-                        <?= render_editable_field($record, 'student_signature_date', $is_nurse, false, 'date') ?>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- CERTIFICATION SECTION (Only for doctors/physicians) -->
+    <?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
+    <div class="certification-section rounded-lg p-4 mb-6 border-2 border-green-500 bg-green-50">
+        <h3 class="font-semibold text-lg mb-4 text-green-800">CERTIFICATION</h3>
         
-        <!-- RIGHT COLUMN -->
-        <div class="space-y-4">
-            <!-- Certification Statement -->
-            <div class="mb-4">
-                <p class="text-sm text-green-800 font-medium mb-3">
-                    "I certify that I have examined and found the applicant to be physically fit/unfit for employment."
-                </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- LEFT COLUMN -->
+            <div class="space-y-4">
+                <!-- School/Company/Institution -->
+                <div>
+                    <label class="block font-medium mb-1 text-green-700">School/Company/Institution:</label>
+                    <input type="text" name="institution" value="BATANGAS STATE UNIVERSITY" 
+                           class="w-full rounded border border-green-300 px-3 py-2 text-sm bg-green-100" readonly>
+                </div>
                 
-                <!-- CLASSIFICATION -->
-                <div class="mt-3">
-                    <label class="block font-medium mb-2 text-green-700">CLASSIFICATION:</label>
-                    <div class="space-y-2">
-                        <div class="flex items-start gap-2">
-                            <?= render_editable_field($record, 'classification_a', $is_nurse, true) ?>
-                            <span class="text-sm font-medium text-green-700">CLASS A - Physically fit to work</span>
-                        </div>
-                        <div class="flex items-start gap-2">
-                            <?= render_editable_field($record, 'classification_b', $is_nurse, true) ?>
-                            <span class="text-sm font-medium text-green-700">CLASS B - Physically underdeveloped or with correctible defects but otherwise fit to work</span>
-                        </div>
-                        <div class="flex items-start gap-2">
-                            <?= render_editable_field($record, 'classification_c', $is_nurse, true) ?>
-                            <span class="text-sm font-medium text-green-700">CLASS C - Employable but owing to certain impairments or conditions, requires special placement or limited duty in a specified or selected assignment requiring follow up treatment/ periodic evaluation</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Treatment/Correction Needed -->
-            <div class="mb-4">
-                <label class="block font-medium mb-2 text-green-700">Needs treatment or correction of:</label>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_skin', $is_nurse, true) ?>
-                            <span class="text-sm">Skin Disease</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_dental', $is_nurse, true) ?>
-                            <span class="text-sm">Dental Defects</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_anemia', $is_nurse, true) ?>
-                            <span class="text-sm">Anemia</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_vision', $is_nurse, true) ?>
-                            <span class="text-sm">Poor Vision</span>
-                        </div>
-                    </div>
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_uti', $is_nurse, true) ?>
-                            <span class="text-sm">Mild Urinary Tract Infection</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_parasitism', $is_nurse, true) ?>
-                            <span class="text-sm">Intestinal Parasitism</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_hypertension', $is_nurse, true) ?>
-                            <span class="text-sm">Mild Hypertension</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <?= render_editable_field($record, 'needs_treatment_others_check', $is_nurse, true) ?>
-                            <span class="text-sm">Others, specify:</span>
-                        </div>
-                        <div class="ml-6">
-                            <?= render_editable_field($record, 'needs_treatment_others_text', $is_nurse) ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- CLASS D -->
-            <div class="flex items-start gap-2 mb-4">
-                <?= render_editable_field($record, 'classification_d', $is_nurse, true) ?>
-                <span class="text-sm font-medium text-green-700">CLASS D - Unfit or unsafe for any type of employment</span>
-            </div>
-            
-            <!-- Physician Information -->
-            <div class="mt-6 pt-4 border-t border-green-300">
-                <label class="block font-medium mb-2 text-green-700">Physician/Medical Examiner</label>
-                <div class="space-y-2">
+                <!-- Name - Fetched from patient record -->
+                <div>
+                    <label class="block font-medium mb-1 text-green-700">Name:</label>
                     <?php
-                    // Get physician name from record or default to the example
-                    $physician_name = !empty($record['physician_name']) ? $record['physician_name'] : 'MARSON KIM L. PERMENTILLA M.D.';
-                    $license_no = !empty($record['license_no']) ? $record['license_no'] : '0169430';
+                    $certified_name = !empty($record['certified_name']) ? $record['certified_name'] : htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name'])));
                     ?>
-                    <input type="text" name="physician_name" value="<?= htmlspecialchars($physician_name) ?>" 
+                    <input type="text" name="certified_name" 
+                           value="<?= $certified_name ?>" 
                            class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
                            <?= !$is_nurse ? 'readonly' : '' ?>>
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-green-700">License No.:</span>
-                        <input type="text" name="license_no" value="<?= htmlspecialchars($license_no) ?>" 
-                               class="w-32 rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
-                               <?= !$is_nurse ? 'readonly' : '' ?>>
+                </div>
+                
+                <!-- Weight (kg) - FIXED: Should be number -->
+                <div>
+                    <label class="block font-medium mb-1 text-green-700">Weight (kg):</label>
+                    <?= render_editable_field($record, 'certified_weight', $is_nurse, false, 'number') ?>
+                </div>
+                
+                <!-- Height (cm) - FIXED: Should be number -->
+                <div>
+                    <label class="block font-medium mb-1 text-green-700">Height (cm):</label>
+                    <?= render_editable_field($record, 'certified_height', $is_nurse, false, 'number') ?>
+                </div>
+                
+                <!-- Civil Status - Fetched from patient record -->
+                <div>
+                    <label class="block font-medium mb-1 text-green-700">Civil Status:</label>
+                    <?php
+                    $certified_civil_status = !empty($record['certified_civil_status']) ? $record['certified_civil_status'] : (!empty($record['civil_status']) ? htmlspecialchars(ucwords(strtolower($record['civil_status']))) : '');
+                    ?>
+                    <input type="text" name="certified_civil_status" 
+                           value="<?= $certified_civil_status ?>" 
+                           class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                           <?= !$is_nurse ? 'readonly' : '' ?>>
+                </div>
+                
+                <!-- Date of Examination - Fetched from medical exam -->
+                <div>
+                    <label class="block font-medium mb-1 text-green-700">Date of Examination:</label>
+                    <?php
+                    $certified_exam_date = !empty($record['certified_exam_date']) ? $record['certified_exam_date'] : (!empty($record['examination_date']) ? htmlspecialchars($record['examination_date']) : '');
+                    ?>
+                    <input type="text" name="certified_exam_date" 
+                           value="<?= $certified_exam_date ?>" 
+                           class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                           <?= !$is_nurse ? 'readonly' : '' ?>>
+                </div>
+                
+                <!-- Authorization Statement -->
+                <div class="mt-4">
+                    <p class="text-sm text-green-800 font-medium mb-3">
+                        "I hereby authorize BATANGAS STATE UNIVERSITY and its officially designated medical examiner 
+                        and examining physician/s to furnish information that the company may need pertaining to my 
+                        health status and other pertinent medical findings and do hereby release them from any and 
+                        all legal responsibilities by so doing. I also further certify that the medical history 
+                        contained herein is true to the best of my knowledge and any false statement will disqualify 
+                        me from any employment benefits and claims."
+                    </p>
+                    
+                    <!-- Signature and Date -->
+                    <div class="mt-4">
+                        
+                        <div class="border-b-2 border-green-400 pt-4 pb-1 min-h-[40px] mb-2">
+                            <span class="text-sm text-gray-600"><?= htmlspecialchars(ucwords(strtolower($record['first_name'] . ' ' . $record['last_name']))) ?></span>
+                        </div>
+                        <div>
+                            <label class="block font-medium mb-1 text-green-700">Date:</label>
+                            <?php
+                            $student_signature_date = !empty($record['student_signature_date']) ? $record['student_signature_date'] : date('Y-m-d');
+                            ?>
+                            <input type="date" name="student_signature_date" value="<?= htmlspecialchars($student_signature_date) ?>" 
+                                   class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                   <?= !$is_nurse ? 'readonly' : '' ?>>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-green-700">Date:</span>
-                        <?= render_editable_field($record, 'physician_date', $is_nurse, false, 'date') ?>
+                </div>
+            </div>
+            
+            <!-- RIGHT COLUMN -->
+            <div class="space-y-4">
+                <!-- Certification Statement -->
+                <div class="mb-4">
+                    <p class="text-sm text-green-800 font-medium mb-3">
+                        "I certify that I have examined and found the applicant to be physically fit/unfit for employment."
+                    </p>
+                    
+                    <!-- CLASSIFICATION -->
+                    <div class="mt-3">
+                        <label class="block font-medium mb-2 text-green-700">CLASSIFICATION:</label>
+                        <div class="space-y-2">
+                            <div class="flex items-start gap-2">
+                                <?= render_editable_field($record, 'classification_a', $is_nurse, true) ?>
+                                <span class="text-sm font-medium text-green-700">CLASS A - Physically fit to work</span>
+                            </div>
+                            <div class="flex items-start gap-2">
+                                <?= render_editable_field($record, 'classification_b', $is_nurse, true) ?>
+                                <span class="text-sm font-medium text-green-700">CLASS B - Physically underdeveloped or with correctible defects but otherwise fit to work</span>
+                            </div>
+                            <div class="flex items-start gap-2">
+                                <?= render_editable_field($record, 'classification_c', $is_nurse, true) ?>
+                                <span class="text-sm font-medium text-green-700">CLASS C - Employable but owing to certain impairments or conditions, requires special placement or limited duty in a specified or selected assignment requiring follow up treatment/ periodic evaluation</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Treatment/Correction Needed -->
+                <div class="mb-4">
+                    <label class="block font-medium mb-2 text-green-700">Needs treatment or correction of:</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_skin', $is_nurse, true) ?>
+                                <span class="text-sm">Skin Disease</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_dental', $is_nurse, true) ?>
+                                <span class="text-sm">Dental Defects</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_anemia', $is_nurse, true) ?>
+                                <span class="text-sm">Anemia</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_vision', $is_nurse, true) ?>
+                                <span class="text-sm">Poor Vision</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_uti', $is_nurse, true) ?>
+                                <span class="text-sm">Mild Urinary Tract Infection</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_parasitism', $is_nurse, true) ?>
+                                <span class="text-sm">Intestinal Parasitism</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_hypertension', $is_nurse, true) ?>
+                                <span class="text-sm">Mild Hypertension</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <?= render_editable_field($record, 'needs_treatment_others_check', $is_nurse, true) ?>
+                                <span class="text-sm">Others, specify:</span>
+                            </div>
+                            <div class="ml-6">
+                                <?= render_editable_field($record, 'needs_treatment_others_text', $is_nurse) ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CLASS D -->
+                <div class="flex items-start gap-2 mb-4">
+                    <?= render_editable_field($record, 'classification_d', $is_nurse, true) ?>
+                    <span class="text-sm font-medium text-green-700">CLASS D - Unfit or unsafe for any type of employment</span>
+                </div>
+                
+                <!-- Physician Information -->
+                <div class="mt-6 pt-4 border-t border-green-300">
+                    <label class="block font-medium mb-2 text-green-700">Physician/Medical Examiner</label>
+                    <div class="space-y-2">
+                        <?php
+                        // Get physician name from record or default to the example
+                        $physician_name = !empty($record['physician_name']) ? $record['physician_name'] : 'MARSON KIM L. PERMENTILLA M.D.';
+                        $license_no = !empty($record['license_no']) ? $record['license_no'] : '0169430';
+                        $physician_date = !empty($record['physician_date']) ? $record['physician_date'] : date('Y-m-d');
+                        ?>
+                        <input type="text" name="physician_name" value="<?= htmlspecialchars($physician_name) ?>" 
+                               class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                               <?= !$is_nurse ? 'readonly' : '' ?>>
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-green-700">License No.:</span>
+                            <input type="text" name="license_no" value="<?= htmlspecialchars($license_no) ?>" 
+                                   class="w-32 rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                   <?= !$is_nurse ? 'readonly' : '' ?>>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-green-700">Date:</span>
+                            <input type="date" name="physician_date" value="<?= htmlspecialchars($physician_date) ?>" 
+                                   class="rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                   <?= !$is_nurse ? 'readonly' : '' ?>>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-<!-- END CERTIFICATION SECTION -->
-<!-- END CERTIFICATION SECTION -->
+    <?php endif; ?>
+    <!-- END CERTIFICATION SECTION -->
+
+    <!-- MODIFIED: COMBINED MEDICAL NOTES SECTION (Nurse and Doctor in one form) -->
+    <div class="medical-diagnoses-section rounded-lg p-4 mb-6 border-2 border-blue-500 bg-blue-50">
+        <h3 class="font-semibold text-lg mb-4 text-blue-800">MEDICAL DIAGNOSIS NOTES</h3>
+        
+        <?php 
+        // Check who can add/edit notes
+        $can_add_nurse_notes = ($user_role === 'nurse' || $user_role === 'admin' || $user_role === 'staff');
+        $can_add_doctor_notes = ($user_role === 'doctor' || $user_role === 'physician' || $user_role === 'admin' || $user_role === 'staff');
+        ?>
+        
+        <!-- Combined Diagnosis Form -->
+        <div class="mb-6 p-4 bg-white rounded-lg border border-blue-300">
+            <h4 class="font-semibold mb-3 text-blue-700">Medical Diagnosis Notes</h4>
+            <form method="POST" id="medical-diagnosis-form">
+                <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                <input type="hidden" name="patient_id" value="<?= $record['patient_id']; ?>">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Nurse Notes Section -->
+                    <div class="border-r border-blue-300 pr-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i class="bi bi-person-badge text-blue-600"></i>
+                            <h5 class="font-semibold text-blue-700">Nurse Notes</h5>
+                            <?php if (!empty($existing_diagnosis['nurse_diagnosis_date'])): ?>
+                                <span class="ml-auto text-xs text-gray-500">
+                                    Last updated: <?= date('M j, Y', strtotime($existing_diagnosis['nurse_diagnosis_date'])) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block font-medium mb-2 text-blue-700">Nurse Assessment:</label>
+                            <textarea name="nurse_note" rows="6" 
+                                      class="w-full rounded border border-blue-300 px-3 py-2 text-sm"
+                                      placeholder="Enter nurse assessment and notes here..." 
+                                      <?= !$can_add_nurse_notes ? 'readonly' : '' ?>
+                                      <?= !$can_add_nurse_notes ? 'disabled' : '' ?>><?= 
+                                      !empty($existing_diagnosis['nurse_note']) ? htmlspecialchars($existing_diagnosis['nurse_note']) : '' ?></textarea>
+                        </div>
+                        
+                        <?php if ($can_add_nurse_notes): ?>
+                            <button type="submit" name="add_medical_diagnosis" value="nurse"
+                                    class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
+                                <i class="bi bi-save"></i> Save Nurse Notes
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- Doctor Notes Section -->
+                    <div class="pl-0 md:pl-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i class="bi bi-heart-pulse text-red-600"></i>
+                            <h5 class="font-semibold text-red-700">Physician/Doctor Notes</h5>
+                            <?php if (!empty($existing_diagnosis['doctor_diagnosis_date'])): ?>
+                                <span class="ml-auto text-xs text-gray-500">
+                                    Last updated: <?= date('M j, Y', strtotime($existing_diagnosis['doctor_diagnosis_date'])) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block font-medium mb-2 text-red-700">Physician Assessment:</label>
+                            <textarea name="doctor_note" rows="6" 
+                                      class="w-full rounded border border-red-300 px-3 py-2 text-sm"
+                                      placeholder="Enter physician assessment and notes here..." 
+                                      <?= !$can_add_doctor_notes ? 'readonly' : '' ?>
+                                      <?= !$can_add_doctor_notes ? 'disabled' : '' ?>><?= 
+                                      !empty($existing_diagnosis['doctor_note']) ? htmlspecialchars($existing_diagnosis['doctor_note']) : '' ?></textarea>
+                        </div>
+                        
+                        <?php if ($can_add_doctor_notes): ?>
+                            <button type="submit" name="add_medical_diagnosis" value="doctor"
+                                    class="bg-red-600 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-red-700 hover:shadow-lg transition-all">
+                                <i class="bi bi-save"></i> Save Doctor Notes
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                
+                <input type="hidden" name="diagnosis_type" id="diagnosis_type" value="">
+                
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Set diagnosis type based on which button is clicked
+                    const nurseBtn = document.querySelector('button[name="add_medical_diagnosis"][value="nurse"]');
+                    const doctorBtn = document.querySelector('button[name="add_medical_diagnosis"][value="doctor"]');
+                    
+                    if (nurseBtn) {
+                        nurseBtn.addEventListener('click', function(e) {
+                            document.getElementById('diagnosis_type').value = 'nurse';
+                        });
+                    }
+                    
+                    if (doctorBtn) {
+                        doctorBtn.addEventListener('click', function(e) {
+                            document.getElementById('diagnosis_type').value = 'doctor';
+                        });
+                    }
+                });
+                </script>
+                
+                <p class="text-xs text-gray-500 mt-3">
+                    Notes will be attributed to you as 
+                    <span class="font-semibold"><?= htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Unknown User') ?></span>
+                    and dated for today.
+                </p>
+            </form>
+        </div>
+
+        <!-- Display Existing Notes -->
+        <div class="space-y-6">
+            <?php if (!empty($existing_diagnosis)): ?>
+                <!-- Combined Notes Display -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Nurse Notes Display -->
+                    <?php if (!empty($existing_diagnosis['nurse_note'])): ?>
+                        <div class="bg-white rounded-lg border border-blue-200 p-4">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold text-blue-700">
+                                        <?= htmlspecialchars($existing_diagnosis['provider_full_name'] ?? $existing_diagnosis['provider_name']) ?>
+                                    </span>
+                                    <span class="text-sm px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                                        <i class="bi bi-person-badge"></i> Nurse Notes
+                                    </span>
+                                </div>
+                                <?php if (!empty($existing_diagnosis['nurse_diagnosis_date'])): ?>
+                                    <div class="text-sm text-gray-500">
+                                        <?= date('M j, Y', strtotime($existing_diagnosis['nurse_diagnosis_date'])) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <div class="text-gray-800"><?= nl2br(htmlspecialchars($existing_diagnosis['nurse_note'])) ?></div>
+                            </div>
+                            
+                            <!-- Delete button (only shown to notes owner or admin) -->
+                            <?php if (($existing_diagnosis['provider_id'] == $_SESSION['user_id'] || $user_role === 'admin') && $can_add_nurse_notes): ?>
+                                <div class="mt-3 pt-3 border-t border-gray-200">
+                                    <form method="POST" onsubmit="return confirm('Are you sure you want to delete these notes?');">
+                                        <input type="hidden" name="diagnosis_id" value="<?= $existing_diagnosis['id']; ?>">
+                                        <button type="submit" name="delete_medical_diagnosis"
+                                                class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                            <i class="bi bi-trash"></i> Delete Nurse Notes
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
+                            <i class="bi bi-person-badge text-3xl text-gray-400 mb-2"></i>
+                            <p class="text-gray-500">No nurse notes recorded yet.</p>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- Doctor Notes Display -->
+                    <?php if (!empty($existing_diagnosis['doctor_note'])): ?>
+                        <div class="bg-white rounded-lg border border-red-200 p-4">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold text-red-700">
+                                        <?= htmlspecialchars($existing_diagnosis['provider_full_name'] ?? $existing_diagnosis['provider_name']) ?>
+                                    </span>
+                                    <span class="text-sm px-2 py-1 rounded-full bg-red-100 text-red-800">
+                                        <i class="bi bi-heart-pulse"></i> Physician Notes
+                                    </span>
+                                </div>
+                                <?php if (!empty($existing_diagnosis['doctor_diagnosis_date'])): ?>
+                                    <div class="text-sm text-gray-500">
+                                        <?= date('M j, Y', strtotime($existing_diagnosis['doctor_diagnosis_date'])) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <div class="text-gray-800"><?= nl2br(htmlspecialchars($existing_diagnosis['doctor_note'])) ?></div>
+                            </div>
+                            
+                            <!-- Delete button (only shown to notes owner or admin) -->
+                            <?php if (($existing_diagnosis['provider_id'] == $_SESSION['user_id'] || $user_role === 'admin') && $can_add_doctor_notes): ?>
+                                <div class="mt-3 pt-3 border-t border-gray-200">
+                                    <form method="POST" onsubmit="return confirm('Are you sure you want to delete these notes?');">
+                                        <input type="hidden" name="diagnosis_id" value="<?= $existing_diagnosis['id']; ?>">
+                                        <button type="submit" name="delete_medical_diagnosis"
+                                                class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                            <i class="bi bi-trash"></i> Delete Doctor Notes
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
+                            <i class="bi bi-heart-pulse text-3xl text-gray-400 mb-2"></i>
+                            <p class="text-gray-500">No physician notes recorded yet.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php else: ?>
+                <div class="text-center py-8 text-gray-500 bg-white rounded-lg border border-blue-200">
+                    <i class="bi bi-clipboard-pulse text-4xl mb-3"></i>
+                    <p class="text-lg">No medical diagnosis notes recorded yet.</p>
+                    <p class="text-sm mt-2">Use the form above to add nurse and/or physician notes.</p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <!-- END MODIFIED MEDICAL NOTES SECTION -->
 
         <!-- ACTION BUTTONS FOR MEDICAL FORM -->
         <div class="mt-8 pt-6 border-t border-maroon-200 no-print">
@@ -2279,46 +2817,32 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         </button>
                     </form>
                     
-                    <!-- Certification Button -->
-                    <?php if (!$is_certified): ?>
-                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
-                            <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
-                                <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-                                <input type="hidden" name="record_type" value="<?= $type; ?>">
-                                <button type="submit" name="mark_for_certification"
-                                        class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
-                                    <i class="bi bi-award"></i> Submit for Certification
-                                </button>
-                            </form>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
-                            <button type="button" disabled
-                                    class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
-                                <i class="bi bi-award-fill"></i> Already Submitted for Certification
-                            </button>
-                        <?php endif; ?>
+                    <!-- Submit for Certification Button -->
+                    <?php if (!$is_certified && $user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                        <button type="button" onclick="saveAndMarkForCertification()"
+                                class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                            <i class="bi bi-award"></i> Save & Submit for Certification
+                        </button>
+                    <?php elseif ($is_certified && $user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                        <button type="button" disabled
+                                class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
+                            <i class="bi bi-award-fill"></i> Already Submitted for Certification
+                        </button>
                     <?php endif; ?>
                 <?php endif; ?>
                 
-                <!-- Doctor/Physician Certification -->
+                <!-- Doctor/Physician Certification - FIXED: Changed to mark as 'certified' -->
                 <?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
-                    <?php if ($is_certified): ?>
-                        <a href="generate_certified_pdf.php?type=<?= urlencode($type) ?>&id=<?= urlencode($id) ?>" 
-                           target="_blank"
-                           class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
-                            <i class="bi bi-printer"></i> Certified for Printing
-                        </a>
+                    <?php if ($record['verification_status'] !== 'certified'): ?>
+                        <button type="button" onclick="saveAndCertify()"
+                                class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                            <i class="bi bi-award"></i> Save & Certify
+                        </button>
                     <?php else: ?>
-                        <!-- Doctor/Physician can mark for certification themselves -->
-                        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
-                            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-                            <input type="hidden" name="record_type" value="<?= $type; ?>">
-                            <button type="submit" name="mark_for_certification"
-                                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
-                                <i class="bi bi-award"></i> Submit for Certification
-                            </button>
-                        </form>
+                        <button type="button" onclick="saveAndPrintCertified()"
+                               class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
+                            <i class="bi bi-printer"></i> Print Certified Form
+                        </button>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
@@ -2496,6 +3020,8 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
     <!-- END ACTION BUTTONS FOR DENTAL FORM -->
 </div> <!-- This closes the dental-section div -->
 
+<!-- REMOVED DENTAL DIAGNOSES SECTION -->
+
 <?php elseif ($type === 'history_form'): ?>
     <!-- Medical History Details -->
     <div class="history-section rounded-lg p-4 mb-6">
@@ -2530,7 +3056,7 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         render_history_exam_row($record, 'appearance_normal', 'appearance_findings', 'Appearance', $is_nurse);
                         render_history_exam_row($record, 'eent_normal', 'eent_findings', 'Eyes/Ear/Nose/Throat', $is_nurse);
                         render_history_exam_row($record, 'pupils_normal', 'pupils_findings', 'Pupils Equal', $is_nurse);
-                        render_history_exam_row($record, 'hearing_normal', 'hearing_findings', 'Hearing', $is_nurse);
+                        render_history_exam_row($record, 'hearning_normal', 'hearing_findings', 'Hearing', $is_nurse);
                         render_history_exam_row($record, 'chest_normal', 'chest_findings', 'Chest', $is_nurse);
                         render_history_exam_row($record, 'heart_normal', 'heart_findings', 'Heart', $is_nurse);
                         ?>
@@ -2595,10 +3121,10 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                     <tr class="hover:bg-maroon-50">
                         <td class="border border-maroon px-4 py-2 text-maroon pl-8">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a. Asthma</td>
                         <td class="border border-maroon px-4 py-2 text-center">
-                            <input type="radio" name="asthma" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['asthma']) && $record['asthma'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                            <input type="radio" name="ashtma" value="1" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['ashtma']) && $record['ashtma'] == 1) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                         <td class="border border-maroon px-4 py-2 text-center">
-                            <input type="radio" name="asthma" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['asthma']) && $record['asthma'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
+                            <input type="radio" name="ashtma" value="0" class="h-5 w-5 text-maroon border-maroon rounded focus:ring-maroon <?= $is_nurse ? 'nurse-editable' : '' ?>" <?= (isset($record['ashtma']) && $record['ashtma'] == 0) ? 'checked' : '' ?> <?= !$is_nurse ? 'disabled' : '' ?>>
                         </td>
                     </tr>
                     <tr class="hover:bg-maroon-50">
@@ -2747,8 +3273,8 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         <?php endif; ?>
         <!-- END For Females Only Section -->
 
-        <!-- Certification Section for History Form -->
-        <!-- MOVED HERE - AFTER THE FEMALE-ONLY SECTION -->
+        <!-- Certification Section for History Form (Only for doctors/physicians) -->
+        <?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
         <div class="certification-section rounded-lg p-4 mb-6 border-2 border-green-500 bg-green-50">
             <h3 class="font-semibold text-lg mb-4 text-green-800">CERTIFICATION</h3>
             
@@ -2765,7 +3291,12 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         </div>
                         <div>
                             <label class="block font-medium mb-1 text-green-700">Date:</label>
-                            <?= render_editable_field($record, 'student_certification_date', $is_nurse, false, 'date') ?>
+                            <?php
+                            $student_certification_date = !empty($record['student_certification_date']) ? $record['student_certification_date'] : date('Y-m-d');
+                            ?>
+                            <input type="date" name="student_certification_date" value="<?= htmlspecialchars($student_certification_date) ?>" 
+                                   class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                   <?= !$is_nurse ? 'readonly' : '' ?>>
                         </div>
                     </div>
                 </div>
@@ -2822,6 +3353,8 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             if (!empty($record['physician_name'])) {
                                 $examiner_name = $record['physician_name'];
                             }
+                            
+                            $physician_certification_date = !empty($record['physician_certification_date']) ? $record['physician_certification_date'] : date('Y-m-d');
                             ?>
                             <input type="text" name="physician_name" value="<?= htmlspecialchars($examiner_name) ?>" 
                                    class="w-full rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
@@ -2834,15 +3367,228 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="font-medium text-green-700">Date:</span>
-                                <?= render_editable_field($record, 'physician_certification_date', $is_nurse, false, 'date') ?>
+                                <input type="date" name="physician_certification_date" value="<?= htmlspecialchars($physician_certification_date) ?>" 
+                                       class="rounded border border-green-300 px-3 py-2 text-sm <?= $is_nurse ? 'nurse-editable' : '' ?>" 
+                                       <?= !$is_nurse ? 'readonly' : '' ?>>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
         <!-- END CERTIFICATION SECTION for History Form -->
-            <!-- END CERTIFICATION SECTION for History Form -->
+
+        <!-- MODIFIED: COMBINED MEDICAL NOTES SECTION for History Forms -->
+        <div class="medical-diagnoses-section rounded-lg p-4 mb-6 border-2 border-blue-500 bg-blue-50">
+            <h3 class="font-semibold text-lg mb-4 text-blue-800">MEDICAL DIAGNOSIS NOTES</h3>
+            
+            <?php 
+            // Check who can add/edit notes
+            $can_add_nurse_notes = ($user_role === 'nurse' || $user_role === 'admin' || $user_role === 'staff');
+            $can_add_doctor_notes = ($user_role === 'doctor' || $user_role === 'physician' || $user_role === 'admin' || $user_role === 'staff');
+            ?>
+            
+            <!-- Combined Diagnosis Form -->
+            <div class="mb-6 p-4 bg-white rounded-lg border border-blue-300">
+                <h4 class="font-semibold mb-3 text-blue-700">Medical Diagnosis Notes</h4>
+                <form method="POST" id="medical-diagnosis-form">
+                    <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
+                    <input type="hidden" name="patient_id" value="<?= $record['patient_id']; ?>">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Nurse Notes Section -->
+                        <div class="border-r border-blue-300 pr-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="bi bi-person-badge text-blue-600"></i>
+                                <h5 class="font-semibold text-blue-700">Nurse Notes</h5>
+                                <?php if (!empty($existing_diagnosis['nurse_diagnosis_date'])): ?>
+                                    <span class="ml-auto text-xs text-gray-500">
+                                        Last updated: <?= date('M j, Y', strtotime($existing_diagnosis['nurse_diagnosis_date'])) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="block font-medium mb-2 text-blue-700">Nurse Assessment:</label>
+                                <textarea name="nurse_note" rows="6" 
+                                          class="w-full rounded border border-blue-300 px-3 py-2 text-sm"
+                                          placeholder="Enter nurse assessment and notes here..." 
+                                          <?= !$can_add_nurse_notes ? 'readonly' : '' ?>
+                                          <?= !$can_add_nurse_notes ? 'disabled' : '' ?>><?= 
+                                          !empty($existing_diagnosis['nurse_note']) ? htmlspecialchars($existing_diagnosis['nurse_note']) : '' ?></textarea>
+                            </div>
+                            
+                            <?php if ($can_add_nurse_notes): ?>
+                                <button type="submit" name="add_medical_diagnosis" value="nurse"
+                                        class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
+                                    <i class="bi bi-save"></i> Save Nurse Notes
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <!-- Doctor Notes Section -->
+                        <div class="pl-0 md:pl-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="bi bi-heart-pulse text-red-600"></i>
+                                <h5 class="font-semibold text-red-700">Physician/Doctor Notes</h5>
+                                <?php if (!empty($existing_diagnosis['doctor_diagnosis_date'])): ?>
+                                    <span class="ml-auto text-xs text-gray-500">
+                                        Last updated: <?= date('M j, Y', strtotime($existing_diagnosis['doctor_diagnosis_date'])) ?>
+                                    </span>
+                            <?php endif; ?>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="block font-medium mb-2 text-red-700">Physician Assessment:</label>
+                                <textarea name="doctor_note" rows="6" 
+                                          class="w-full rounded border border-red-300 px-3 py-2 text-sm"
+                                          placeholder="Enter physician assessment and notes here..." 
+                                          <?= !$can_add_doctor_notes ? 'readonly' : '' ?>
+                                          <?= !$can_add_doctor_notes ? 'disabled' : '' ?>><?= 
+                                          !empty($existing_diagnosis['doctor_note']) ? htmlspecialchars($existing_diagnosis['doctor_note']) : '' ?></textarea>
+                            </div>
+                            
+                            <?php if ($can_add_doctor_notes): ?>
+                                <button type="submit" name="add_medical_diagnosis" value="doctor"
+                                        class="bg-red-600 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-red-700 hover:shadow-lg transition-all">
+                                    <i class="bi bi-save"></i> Save Doctor Notes
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="diagnosis_type" id="diagnosis_type" value="">
+                    
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        // Set diagnosis type based on which button is clicked
+                        const nurseBtn = document.querySelector('button[name="add_medical_diagnosis"][value="nurse"]');
+                        const doctorBtn = document.querySelector('button[name="add_medical_diagnosis"][value="doctor"]');
+                        
+                        if (nurseBtn) {
+                            nurseBtn.addEventListener('click', function(e) {
+                                document.getElementById('diagnosis_type').value = 'nurse';
+                            });
+                        }
+                        
+                        if (doctorBtn) {
+                            doctorBtn.addEventListener('click', function(e) {
+                                document.getElementById('diagnosis_type').value = 'doctor';
+                            });
+                        }
+                    });
+                    </script>
+                    
+                    <p class="text-xs text-gray-500 mt-3">
+                        Notes will be attributed to you as 
+                        <span class="font-semibold"><?= htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Unknown User') ?></span>
+                        and dated for today.
+                    </p>
+                </form>
+            </div>
+
+            <!-- Display Existing Notes -->
+            <div class="space-y-6">
+                <?php if (!empty($existing_diagnosis)): ?>
+                    <!-- Combined Notes Display -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Nurse Notes Display -->
+                        <?php if (!empty($existing_diagnosis['nurse_note'])): ?>
+                            <div class="bg-white rounded-lg border border-blue-200 p-4">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-semibold text-blue-700">
+                                            <?= htmlspecialchars($existing_diagnosis['provider_full_name'] ?? $existing_diagnosis['provider_name']) ?>
+                                    </span>
+                                        <span class="text-sm px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                                            <i class="bi bi-person-badge"></i> Nurse Notes
+                                        </span>
+                                    </div>
+                                    <?php if (!empty($existing_diagnosis['nurse_diagnosis_date'])): ?>
+                                        <div class="text-sm text-gray-500">
+                                            <?= date('M j, Y', strtotime($existing_diagnosis['nurse_diagnosis_date'])) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <div class="text-gray-800"><?= nl2br(htmlspecialchars($existing_diagnosis['nurse_note'])) ?></div>
+                                </div>
+                                
+                                <!-- Delete button (only shown to notes owner or admin) -->
+                                <?php if (($existing_diagnosis['provider_id'] == $_SESSION['user_id'] || $user_role === 'admin') && $can_add_nurse_notes): ?>
+                                    <div class="mt-3 pt-3 border-t border-gray-200">
+                                        <form method="POST" onsubmit="return confirm('Are you sure you want to delete these notes?');">
+                                            <input type="hidden" name="diagnosis_id" value="<?= $existing_diagnosis['id']; ?>">
+                                            <button type="submit" name="delete_medical_diagnosis"
+                                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                                <i class="bi bi-trash"></i> Delete Nurse Notes
+                                        </button>
+                                        </form>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
+                                <i class="bi bi-person-badge text-3xl text-gray-400 mb-2"></i>
+                                <p class="text-gray-500">No nurse notes recorded yet.</p>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <!-- Doctor Notes Display -->
+                        <?php if (!empty($existing_diagnosis['doctor_note'])): ?>
+                            <div class="bg-white rounded-lg border border-red-200 p-4">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-semibold text-red-700">
+                                            <?= htmlspecialchars($existing_diagnosis['provider_full_name'] ?? $existing_diagnosis['provider_name']) ?>
+                                        </span>
+                                        <span class="text-sm px-2 py-1 rounded-full bg-red-100 text-red-800">
+                                            <i class="bi bi-heart-pulse"></i> Physician Notes
+                                        </span>
+                                    </div>
+                                    <?php if (!empty($existing_diagnosis['doctor_diagnosis_date'])): ?>
+                                        <div class="text-sm text-gray-500">
+                                            <?= date('M j, Y', strtotime($existing_diagnosis['doctor_diagnosis_date'])) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <div class="text-gray-800"><?= nl2br(htmlspecialchars($existing_diagnosis['doctor_note'])) ?></div>
+                                </div>
+                                
+                                <!-- Delete button (only shown to notes owner or admin) -->
+                                <?php if (($existing_diagnosis['provider_id'] == $_SESSION['user_id'] || $user_role === 'admin') && $can_add_doctor_notes): ?>
+                                    <div class="mt-3 pt-3 border-t border-gray-200">
+                                        <form method="POST" onsubmit="return confirm('Are you sure you want to delete these notes?');">
+                                            <input type="hidden" name="diagnosis_id" value="<?= $existing_diagnosis['id']; ?>">
+                                            <button type="submit" name="delete_medical_diagnosis"
+                                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                                <i class="bi bi-trash"></i> Delete Doctor Notes
+                                            </button>
+                                        </form>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
+                                <i class="bi bi-heart-pulse text-3xl text-gray-400 mb-2"></i>
+                                <p class="text-gray-500">No physician notes recorded yet.</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="text-center py-8 text-gray-500 bg-white rounded-lg border border-blue-200">
+                        <i class="bi bi-clipboard-pulse text-4xl mb-3"></i>
+                        <p class="text-lg">No medical diagnosis notes recorded yet.</p>
+                        <p class="text-sm mt-2">Use the form above to add nurse and/or physician notes.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <!-- END MODIFIED MEDICAL NOTES SECTION for History Forms -->
 
         <!-- ACTION BUTTONS FOR HISTORY FORM -->
         <div class="mt-6 pt-6 border-t border-maroon-200 no-print">
@@ -2861,46 +3607,32 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
                         </button>
                     </form>
                     
-                    <!-- Certification Button -->
-                    <?php if (!$is_certified): ?>
-                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
-                            <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
-                                <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-                                <input type="hidden" name="record_type" value="<?= $type; ?>">
-                                <button type="submit" name="mark_for_certification"
-                                        class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
-                                    <i class="bi bi-award"></i> Submit for Certification
-                                </button>
-                            </form>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <?php if ($user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
-                            <button type="button" disabled
-                                    class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
-                                <i class="bi bi-award-fill"></i> Already Submitted for Certification
-                            </button>
-                        <?php endif; ?>
+                    <!-- Submit for Certification Button -->
+                    <?php if (!$is_certified && $user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                        <button type="button" onclick="saveAndMarkForCertification()"
+                                class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                            <i class="bi bi-award"></i> Save & Submit for Certification
+                        </button>
+                    <?php elseif ($is_certified && $user_role !== 'doctor' && $user_role !== 'dentist' && $user_role !== 'physician'): ?>
+                        <button type="button" disabled
+                                class="bg-gray-400 text-white px-6 py-2 rounded-lg shadow font-semibold cursor-not-allowed">
+                            <i class="bi bi-award-fill"></i> Already Submitted for Certification
+                        </button>
                     <?php endif; ?>
                 <?php endif; ?>
                 
-                <!-- Doctor/Physician Certification -->
+                <!-- Doctor/Physician Certification - FIXED: Changed to mark as 'certified' -->
                 <?php if (($user_role === 'doctor' || $user_role === 'physician') && ($type === 'history_form' || $type === 'medical_form' || $type === 'medical_exam')): ?>
-                    <?php if ($is_certified): ?>
-                        <a href="generate_certified_pdf.php?type=<?= urlencode($type) ?>&id=<?= urlencode($id) ?>" 
-                           target="_blank"
-                           class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
-                            <i class="bi bi-printer"></i> Certified for Printing
-                        </a>
+                    <?php if ($record['verification_status'] !== 'certified'): ?>
+                        <button type="button" onclick="saveAndCertify()"
+                                class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
+                            <i class="bi bi-award"></i> Save & Certify
+                        </button>
                     <?php else: ?>
-                        <!-- Doctor/Physician can mark for certification themselves -->
-                        <form method="POST" onsubmit="return confirm('Are you sure you want to mark this record for certification? This will change the status of the form.');" class="inline">
-                            <input type="hidden" name="record_id" value="<?= $record['record_id']; ?>">
-                            <input type="hidden" name="record_type" value="<?= $type; ?>">
-                            <button type="submit" name="mark_for_certification"
-                                    class="bg-green-500 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-green-600 hover:shadow-lg transition-all">
-                                <i class="bi bi-award"></i> Submit for Certification
-                            </button>
-                        </form>
+                        <button type="button" onclick="saveAndPrintCertified()"
+                               class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-semibold hover:bg-blue-700 hover:shadow-lg transition-all">
+                            <i class="bi bi-printer"></i> Print Certified Form
+                        </button>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
@@ -2908,8 +3640,6 @@ function getDiagnosisButton($user_role, $patient_id, $record_id, $type) {
         <!-- END ACTION BUTTONS FOR HISTORY FORM -->
 
     </div> <!-- This closes the history-section div -->
-
-
 
        
         <?php endif; ?>
@@ -2959,7 +3689,7 @@ function validateDentalChartData() {
             alert("Dental chart data is valid JSON!");
         }
     } catch (e) {
-        alert("Error in dental chart data: " + e.message);
+        alert("Error in dental chart data: " . e.message);
     }
 }
 
@@ -2985,7 +3715,7 @@ function formatDentalChartDataForDisplay(chartData) {
                     text: text
                 };
             }
-            conditions[condition].teeth.push(parseInt(toothNumber));
+            conditions[condition]['teeth'].push(parseInt(toothNumber));
         }
     });
     
@@ -3104,19 +3834,19 @@ document.addEventListener('DOMContentLoaded', function() {
     updateFormattedDentalDataView();
 });
 
-// Make sure functions are available globally
+// FIX: Updated tooth condition toggle function with proper color handling
 window.toggleToothCondition = function(toothElement) {
     const toothNumber = parseInt(toothElement.getAttribute('data-tooth'));
     const conditionContainer = toothElement.parentElement.querySelector('.tooth-condition');
     
     // Cycle through conditions
     const conditions = [
-        { name: 'healthy', color: 'bg-green-500', text: 'Healthy', label: 'H' },
-        { name: 'caries', color: 'bg-red-500', text: 'Caries', label: 'C' },
-        { name: 'filling', color: 'bg-blue-500', text: 'Filling', label: 'F' },
-        { name: 'extraction', color: 'bg-yellow-500', text: 'Extraction', label: 'E' },
-        { name: 'crown', color: 'bg-purple-500', text: 'Crown/Bridge', label: 'CB' },
-        { name: 'none', color: 'bg-white', text: 'None', label: '' }
+        { name: 'healthy', bg: 'bg-green-500', text: 'text-white', border: 'border-green-600', label: 'H', displayText: 'Healthy' },
+        { name: 'caries', bg: 'bg-red-500', text: 'text-white', border: 'border-red-600', label: 'C', displayText: 'Caries' },
+        { name: 'filling', bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-600', label: 'F', displayText: 'Filling' },
+        { name: 'extraction', bg: 'bg-yellow-500', text: 'text-gray-800', border: 'border-yellow-600', label: 'E', displayText: 'Extraction' },
+        { name: 'crown', bg: 'bg-purple-500', text: 'text-white', border: 'border-purple-600', label: 'CB', displayText: 'Crown/Bridge' },
+        { name: 'none', bg: 'bg-white', text: 'text-gray-800', border: 'border-gray-300', label: '', displayText: 'None' }
     ];
 
     const currentCondition = window.dentalChartState[toothNumber]?.condition || 'none';
@@ -3127,8 +3857,11 @@ window.toggleToothCondition = function(toothElement) {
     if (nextCondition.name === 'none') {
         // Remove condition
         delete window.dentalChartState[toothNumber];
-        toothElement.className = toothElement.className.replace(/bg-\w+-\d+/g, '') + ' bg-white text-gray-800';
-        toothElement.style.borderColor = '';
+        // Reset to default appearance
+        toothElement.className = toothElement.className.replace(/bg-\w+-\d+/g, '')
+            .replace(/text-\w+-\d+/g, '')
+            .replace(/border-\w+-\d+/g, '')
+            + ' bg-white text-gray-800 border-2 border-gray-300';
         conditionContainer.textContent = '';
         conditionContainer.className = 'tooth-condition text-xs mt-1 text-center min-h-[16px]';
     } else {
@@ -3136,11 +3869,14 @@ window.toggleToothCondition = function(toothElement) {
         window.dentalChartState[toothNumber] = {
             condition: nextCondition.name,
             label: nextCondition.label,
-            text: nextCondition.text
+            text: nextCondition.displayText
         };
         
-        // Update visual appearance
-        toothElement.className = toothElement.className.replace(/bg-\w+-\d+/g, '') + ` ${nextCondition.color} text-white`;
+        // Update visual appearance - remove all color classes first
+        toothElement.className = toothElement.className.replace(/bg-\w+-\d+/g, '')
+            .replace(/text-\w+-\d+/g, '')
+            .replace(/border-\w+-\d+/g, '')
+            + ` ${nextCondition.bg} ${nextCondition.text} ${nextCondition.border}`;
         
         // Update condition label
         conditionContainer.textContent = nextCondition.label;
@@ -3215,7 +3951,10 @@ window.resetDentalChart = function() {
         const conditionContainer = tooth.parentElement.querySelector('.tooth-condition');
         
         delete window.dentalChartState[toothNumber];
-        tooth.className = tooth.className.replace(/bg-\w+-\d+/g, '') + ' bg-white text-gray-800 border-2 border-gray-300';
+        tooth.className = tooth.className.replace(/bg-\w+-\d+/g, '')
+            .replace(/text-\w+-\d+/g, '')
+            .replace(/border-\w+-\d+/g, '')
+            + ' bg-white text-gray-800 border-2 border-gray-300';
         conditionContainer.textContent = '';
         conditionContainer.className = 'tooth-condition text-xs mt-1 text-center min-h-[16px]';
     });
@@ -3229,39 +3968,78 @@ window.resetDentalChart = function() {
     alert('Dental chart has been reset!');
 }
 
-// Function to mark record for certification
-window.markForCertification = function() {
-    if (!confirm('Are you sure you want to mark this record for certification? This will change the status of the form.')) {
+// Function to save and mark for certification
+function saveAndMarkForCertification() {
+    if (!confirm('Are you sure you want to save and submit this record for certification?')) {
         return;
     }
     
-    // Create a hidden form to submit
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '';
+    const form = document.getElementById('record-form');
+    if (form) {
+        // Create hidden inputs for save and mark for certification
+        const updateInput = document.createElement('input');
+        updateInput.type = 'hidden';
+        updateInput.name = 'update_record';
+        updateInput.value = '1';
+        form.appendChild(updateInput);
+        
+        const certifyInput = document.createElement('input');
+        certifyInput.type = 'hidden';
+        certifyInput.name = 'mark_for_certification';
+        certifyInput.value = '1';
+        form.appendChild(certifyInput);
+        
+        // Submit the form
+        form.submit();
+    }
+}
+
+// Function to save and mark as certified (for doctors/physicians)
+function saveAndCertify() {
+    if (!confirm('Are you sure you want to save and certify this record? This will mark the form as certified.')) {
+        return;
+    }
     
-    // Add hidden inputs
-    const recordIdInput = document.createElement('input');
-    recordIdInput.type = 'hidden';
-    recordIdInput.name = 'record_id';
-    recordIdInput.value = '<?= $record['record_id'] ?>';
-    form.appendChild(recordIdInput);
-    
-    const recordTypeInput = document.createElement('input');
-    recordTypeInput.type = 'hidden';
-    recordTypeInput.name = 'record_type';
-    recordTypeInput.value = '<?= $type ?>';
-    form.appendChild(recordTypeInput);
-    
-    const markForCertificationInput = document.createElement('input');
-    markForCertificationInput.type = 'hidden';
-    markForCertificationInput.name = 'mark_for_certification';
-    markForCertificationInput.value = '1';
-    form.appendChild(markForCertificationInput);
-    
-    // Submit the form
-    document.body.appendChild(form);
-    form.submit();
+    const form = document.getElementById('record-form');
+    if (form) {
+        // Create hidden inputs for save and certify
+        const updateInput = document.createElement('input');
+        updateInput.type = 'hidden';
+        updateInput.name = 'update_record';
+        updateInput.value = '1';
+        form.appendChild(updateInput);
+        
+        const certifyInput = document.createElement('input');
+        certifyInput.type = 'hidden';
+        certifyInput.name = 'certify_after_save';
+        certifyInput.value = '1';
+        form.appendChild(certifyInput);
+        
+        // Submit the form
+        form.submit();
+    }
+}
+
+// Function to print certified form (only when already certified)
+function saveAndPrintCertified() {
+    const form = document.getElementById('record-form');
+    if (form) {
+        // Create hidden inputs for save and print
+        const updateInput = document.createElement('input');
+        updateInput.type = 'hidden';
+        updateInput.name = 'update_record';
+        updateInput.value = '1';
+        form.appendChild(updateInput);
+        
+        const printInput = document.createElement('input');
+        printInput.type = 'hidden';
+        printInput.name = 'print_after_save';
+        printInput.value = '1';
+        form.appendChild(printInput);
+        
+        // Submit the form
+        form.submit();
+    }
 }
 
 // Initialize the chart when page loads
@@ -3275,7 +4053,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 const conditionContainer = toothElement.parentElement.querySelector('.tooth-condition');
                 const conditionInfo = window.getConditionInfo(condition.condition);
                 
-                toothElement.className = toothElement.className.replace(/bg-\w+-\d+/g, '') + ` ${conditionInfo.color} text-white`;
+                // Apply appropriate classes based on condition
+                let bgClass = '';
+                let textClass = '';
+                let borderClass = '';
+                
+                switch(condition.condition) {
+                    case 'healthy':
+                        bgClass = 'bg-green-500';
+                        textClass = 'text-white';
+                        borderClass = 'border-green-600';
+                        break;
+                    case 'caries':
+                        bgClass = 'bg-red-500';
+                        textClass = 'text-white';
+                        borderClass = 'border-red-600';
+                        break;
+                    case 'filling':
+                        bgClass = 'bg-blue-500';
+                        textClass = 'text-white';
+                        borderClass = 'border-blue-600';
+                        break;
+                    case 'extraction':
+                        bgClass = 'bg-yellow-500';
+                        textClass = 'text-gray-800';
+                        borderClass = 'border-yellow-600';
+                        break;
+                    case 'crown':
+                        bgClass = 'bg-purple-500';
+                        textClass = 'text-white';
+                        borderClass = 'border-purple-600';
+                        break;
+                }
+                
+                // Remove existing color classes and add new ones
+                toothElement.className = toothElement.className.replace(/bg-\w+-\d+/g, '')
+                    .replace(/text-\w+-\d+/g, '')
+                    .replace(/border-\w+-\d+/g, '')
+                    + ` ${bgClass} ${textClass} ${borderClass}`;
+                
                 conditionContainer.textContent = condition.label;
                 conditionContainer.className = `tooth-condition text-xs mt-1 text-center min-h-[16px] font-semibold`;
             }
@@ -3435,7 +4251,5 @@ document.addEventListener('DOMContentLoaded', function() {
     ?>
 });
 </script>
-
-
 </body>
 </html>

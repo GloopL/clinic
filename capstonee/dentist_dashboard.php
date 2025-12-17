@@ -541,10 +541,6 @@ function getActivityBg($activity_type) {
                 <i class="bi bi-clipboard-check"></i>
                 <span>Dental Exams</span>
             </a>
-            <a href="#treatment" class="tab-link" data-tab="treatment">
-                <i class="bi bi-heart-pulse"></i>
-                <span>Treatment Plans</span>
-            </a>
             <a href="#profile" class="tab-link" data-tab="profile">
                 <i class="bi bi-person-circle"></i>
                 <span>Profile</span>
@@ -874,46 +870,6 @@ function getActivityBg($activity_type) {
                         class="w-full h-full fullscreen-iframe"
                         style="border: none;"
                     ></iframe>
-                </div>
-            </div>
-
-            <!-- Treatment Plans Tab -->
-            <div id="treatment-content" class="tab-panel hidden">
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <i class="bi bi-heart-pulse text-maroon"></i> Treatment Plans
-                    </h2>
-                    <p class="text-gray-600 mb-6">Manage dental treatment plans and follow-ups</p>
-                    
-                    <div class="mb-6">
-                        <a href="modules/records/treatment_plans.php" target="_blank" class="maroon-gradient-button text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-                            <i class="bi bi-calendar-plus"></i> Manage Treatment Plans
-                        </a>
-                    </div>
-                    
-                    <div class="bg-maroon-light border border-maroon rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-maroon mb-3 flex items-center gap-2">
-                            <i class="bi bi-info-circle-fill"></i> Dental Treatment Guidelines
-                        </h3>
-                        <ul class="space-y-2 text-gray-700">
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Create personalized treatment plans for patients</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Schedule follow-up appointments</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Track treatment progress and outcomes</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                <span>Document procedures and recommendations</span>
-                            </li>
-                        </ul>
-                    </div>
                 </div>
             </div>
 
