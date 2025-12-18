@@ -754,43 +754,7 @@ function getActivityBg($activity_type) {
                     <?php endif; ?>
                 </div>
 
-                <!-- Quick Actions -->
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
-                        <i class="bi bi-lightning-charge text-maroon"></i> Quick Actions
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <a href="modules/records/patients.php" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
-                            <div class="bg-maroon text-white p-3 rounded-lg">
-                                <i class="bi bi-person-plus"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-gray-800">Add New Patient</h4>
-                                <p class="text-gray-600 text-sm">Register a new patient</p>
-                            </div>
-                        </a>
-                        
-                        <a href="modules/records/verify_submission.php" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
-                            <div class="bg-maroon text-white p-3 rounded-lg">
-                                <i class="bi bi-shield-check"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-gray-800">Verify Submissions</h4>
-                                <p class="text-gray-600 text-sm">Review pending forms</p>
-                            </div>
-                        </a>
-                        
-                        <a href="modules/analytics/analytics_dashboard.php" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
-                            <div class="bg-maroon text-white p-3 rounded-lg">
-                                <i class="bi bi-bar-chart"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-gray-800">View Analytics</h4>
-                                <p class="text-gray-600 text-sm">Clinic statistics</p>
-                            </div>
-                        </a>
-                    </div>
-                </div>
+                
             </div>
 
 <!-- Patients Tab -->

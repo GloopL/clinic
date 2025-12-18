@@ -767,43 +767,7 @@ function getActivityBg($activity_type) {
                     <?php endif; ?>
                 </div>
 
-                <!-- Quick Actions -->
-                <div class="bg-white rounded-xl shadow-md p-6">
-                    <h3 class="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
-                        <i class="bi bi-lightning-charge text-maroon"></i> Quick Actions
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <a href="#verification" onclick="switchTab('verification')" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
-                            <div class="bg-maroon text-white p-3 rounded-lg">
-                                <i class="bi bi-shield-check"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-gray-800">Verify Submissions</h4>
-                                <p class="text-gray-600 text-sm">Review pending dental forms</p>
-                            </div>
-                        </a>
-                        
-                        <a href="#dental-exams" onclick="switchTab('dental-exams')" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
-                            <div class="bg-maroon text-white p-3 rounded-lg">
-                                <i class="bi bi-tooth"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-gray-800">Dental Exams</h4>
-                                <p class="text-gray-600 text-sm">View all dental examinations</p>
-                            </div>
-                        </a>
-                        
-                        <a href="#patients" onclick="switchTab('patients')" class="bg-maroon-light border border-maroon rounded-lg p-4 hover:bg-red-50 transition-all duration-200 flex items-center gap-3">
-                            <div class="bg-maroon text-white p-3 rounded-lg">
-                                <i class="bi bi-person-plus"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-gray-800">Manage Patients</h4>
-                                <p class="text-gray-600 text-sm">View all patient records</p>
-                            </div>
-                        </a>
-                    </div>
-                </div>
+                
             </div>
 
             <!-- Patients Tab -->
